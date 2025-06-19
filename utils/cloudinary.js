@@ -6,9 +6,9 @@ dotenv.config();
 
 // Configuración de Cloudinary
 cloudinary.config({
-  cloud_name: process.env.CLOUD_NAME,
-  api_key: process.env.API_KEY,
-  api_secret:process.env.API_SECRET,
+  cloud_name:"dnodisza5",
+  api_key: "713585429952622",
+  api_secret:"Xi0UEkmnjB6PllVt2W5871s8pJ0",
 });
 
 // Configuración de Multer para subir archivos en memoria
