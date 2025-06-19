@@ -40,7 +40,7 @@ app.use('/api', userActividadRoutes);
 
 
 // Conexión a la base de datos
-mongoose.connect(process.env.MONGO_URI, { useNewUrlParser: true, useUnifiedTopology: true })
+mongoose.connect("MONGO_URI=mongodb+srv://empatiadigital2025:empatiadigital2025@empatia.k2mcalb.mongodb.net/?retryWrites=true&w=majority&appName=Empatia1", { useNewUrlParser: true, useUnifiedTopology: true })
   .then(() => console.log('Conectado a MongoDB'))
   .catch(err => console.error('Error de conexión', err));
 
