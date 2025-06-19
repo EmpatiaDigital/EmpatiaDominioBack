@@ -95,7 +95,7 @@ exports.registrarSocio = async (req, res) => {
             <p style="margin-top: 20px;">🔐 Por tu seguridad, al ingresar por primera vez se te pedirá que cambies esta contraseña.</p>
 
             <div style="text-align: center; margin: 25px 0;">
-              <a href="https://sentidos-front.vercel.app/login" target="_blank" style="background-color: #005b4f; color: white; padding: 12px 25px; border-radius: 5px; text-decoration: none; font-size: 16px;">
+              <a href="https://empatiadigital.com.ar/login" target="_blank" style="background-color: #005b4f; color: white; padding: 12px 25px; border-radius: 5px; text-decoration: none; font-size: 16px;">
                 Ingresar a la plataforma
               </a>
             </div>
