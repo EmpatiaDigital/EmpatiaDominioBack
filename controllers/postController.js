@@ -65,7 +65,7 @@ exports.crearPost = async (req, res) => {
           ` : ''}
       
           <div style="text-align: center; margin-top: 30px;">
-            <a href="https://empatia-front.vercel.app/post/${nuevoPost._id}" 
+            <a href="https://www.empatiadigital.com.ar/post/${nuevoPost._id}" 
                style="background-color: #27ae60; color: white; padding: 12px 20px; text-decoration: none; border-radius: 6px; font-weight: bold;">
               🔗 Ver el post completo
             </a>
