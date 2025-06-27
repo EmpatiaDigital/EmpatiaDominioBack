@@ -64,7 +64,7 @@ app.get("/post/:id", async (req, res) => {
           <meta property="og:title" content="${post.titulo}" />
           <meta property="og:description" content="${post.epigrafe || ''}" />
           <meta property="og:image" content="${post.portada}" />
-          <meta property="og:url" content="https://empatia-front.vercel.app/post/${post._id}" />
+          <meta property="og:url" content="https://empatiadigital.com.ar/post/${post._id}" />
           <meta property="og:type" content="article" />
           <meta name="twitter:card" content="summary_large_image" />
           <meta name="twitter:title" content="${post.titulo}" />
