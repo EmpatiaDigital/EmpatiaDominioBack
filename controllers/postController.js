@@ -9,7 +9,8 @@ const transporter = nodemailer.createTransport({
   secure: true,
   auth: {
     user: "empatiadigital2025@gmail.com",
-    pass: "bxtq qnew iguv hegu",
+    pass: "ebqd hhyo schf hlxc",
+    // pass: "bxtq qnew iguv hegu",
   },
 });
 
