@@ -1,0 +1,219 @@
+const Course = require('../models/Course');
+const cloudinary = require('cloudinary').v2;
+
+// Configuración de Cloudinary (asegúrate de tener las variables de entorno)
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET
+});
+
+// Obtener el curso activo
+exports.getActiveCourse = async (req, res) => {
+  try {
+    const course = await Course.findOne({ activo: true });
+    if (!course) {
+      return res.status(404).json({ message: 'No hay curso activo' });
+    }
+    res.json(course);
+  } catch (error) {
+    res.status(500).json({ message: 'Error al obtener el curso', error: error.message });
+  }
+};
+
+// Obtener todos los cursos (admin)
+exports.getAllCourses = async (req, res) => {
+  try {
+    const courses = await Course.find().sort({ createdAt: -1 });
+    res.json(courses);
+  } catch (error) {
+    res.status(500).json({ message: 'Error al obtener cursos', error: error.message });
+  }
+};
+
+// Obtener un curso por ID
+exports.getCourseById = async (req, res) => {
+  try {
+    const course = await Course.findById(req.params.id);
+    if (!course) {
+      return res.status(404).json({ message: 'Curso no encontrado' });
+    }
+    res.json(course);
+  } catch (error) {
+    res.status(500).json({ message: 'Error al obtener el curso', error: error.message });
+  }
+};
+
+// Crear un nuevo curso
+exports.createCourse = async (req, res) => {
+  try {
+    const course = new Course(req.body);
+    await course.save();
+    res.status(201).json(course);
+  } catch (error) {
+    res.status(400).json({ message: 'Error al crear el curso', error: error.message });
+  }
+};
+
+// Actualizar curso
+exports.updateCourse = async (req, res) => {
+  try {
+    const course = await Course.findByIdAndUpdate(
+      req.params.id,
+      req.body,
+      { new: true, runValidators: true }
+    );
+    if (!course) {
+      return res.status(404).json({ message: 'Curso no encontrado' });
+    }
+    res.json(course);
+  } catch (error) {
+    res.status(400).json({ message: 'Error al actualizar el curso', error: error.message });
+  }
+};
+
+// Subir imagen principal
+exports.uploadMainImage = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { image } = req.body; // Base64 image
+
+    if (!image) {
+      return res.status(400).json({ message: 'No se proporcionó imagen' });
+    }
+
+    // Subir a Cloudinary
+    const uploadResponse = await cloudinary.uploader.upload(image, {
+      folder: 'courses',
+      resource_type: 'image'
+    });
+
+    // Actualizar curso
+    const course = await Course.findByIdAndUpdate(
+      id,
+      { imagenPrincipal: uploadResponse.secure_url },
+      { new: true }
+    );
+
+    if (!course) {
+      return res.status(404).json({ message: 'Curso no encontrado' });
+    }
+
+    res.json({
+      message: 'Imagen subida exitosamente',
+      imageUrl: uploadResponse.secure_url,
+      course
+    });
+  } catch (error) {
+    res.status(500).json({ message: 'Error al subir imagen', error: error.message });
+  }
+};
+
+// Agregar imagen a galería
+exports.addGalleryImage = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { image } = req.body;
+
+    if (!image) {
+      return res.status(400).json({ message: 'No se proporcionó imagen' });
+    }
+
+    const uploadResponse = await cloudinary.uploader.upload(image, {
+      folder: 'courses/gallery',
+      resource_type: 'image'
+    });
+
+    const course = await Course.findByIdAndUpdate(
+      id,
+      {
+        $push: {
+          imagenesGaleria: {
+            url: uploadResponse.secure_url,
+            publicId: uploadResponse.public_id
+          }
+        }
+      },
+      { new: true }
+    );
+
+    if (!course) {
+      return res.status(404).json({ message: 'Curso no encontrado' });
+    }
+
+    res.json({
+      message: 'Imagen agregada a la galería',
+      course
+    });
+  } catch (error) {
+    res.status(500).json({ message: 'Error al agregar imagen', error: error.message });
+  }
+};
+
+// Eliminar imagen de galería
+exports.deleteGalleryImage = async (req, res) => {
+  try {
+    const { id, imageId } = req.params;
+
+    const course = await Course.findById(id);
+    if (!course) {
+      return res.status(404).json({ message: 'Curso no encontrado' });
+    }
+
+    const imageToDelete = course.imagenesGaleria.id(imageId);
+    if (!imageToDelete) {
+      return res.status(404).json({ message: 'Imagen no encontrada' });
+    }
+
+    // Eliminar de Cloudinary
+    if (imageToDelete.publicId) {
+      await cloudinary.uploader.destroy(imageToDelete.publicId);
+    }
+
+    // Eliminar del array
+    course.imagenesGaleria.pull(imageId);
+    await course.save();
+
+    res.json({
+      message: 'Imagen eliminada',
+      course
+    });
+  } catch (error) {
+    res.status(500).json({ message: 'Error al eliminar imagen', error: error.message });
+  }
+};
+
+// Activar/desactivar curso
+exports.toggleCourseStatus = async (req, res) => {
+  try {
+    const course = await Course.findById(req.params.id);
+    if (!course) {
+      return res.status(404).json({ message: 'Curso no encontrado' });
+    }
+
+    // Si se está activando este curso, desactivar los demás
+    if (!course.activo) {
+      await Course.updateMany({ _id: { $ne: course._id } }, { activo: false });
+    }
+
+    course.activo = !course.activo;
+    await course.save();
+
+    res.json(course);
+  } catch (error) {
+    res.status(500).json({ message: 'Error al cambiar estado', error: error.message });
+  }
+};
+
+// Eliminar curso
+exports.deleteCourse = async (req, res) => {
+  try {
+    const course = await Course.findByIdAndDelete(req.params.id);
+    if (!course) {
+      return res.status(404).json({ message: 'Curso no encontrado' });
+    }
+    res.json({ message: 'Curso eliminado exitosamente' });
+  } catch (error) {
+    res.status(500).json({ message: 'Error al eliminar curso', error: error.message });
+  }
+};
