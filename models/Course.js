@@ -4,11 +4,39 @@ const courseSchema = new mongoose.Schema({
   titulo: {
     type: String,
     required: true,
-    default: 'Curso de Desarrollo Web'
+    trim: true
   },
   descripcion: {
     type: String,
-    default: 'Aprende las mejores prácticas del desarrollo web moderno'
+    required: true
+  },
+  duracion: {
+    type: String,
+    required: true
+  },
+  modalidad: {
+    type: String,
+    required: true
+  },
+  precio: {
+    type: String,
+    required: true
+  },
+  cuposDisponibles: {
+    type: Number,
+    required: true,
+    min: 0,
+    default: 0
+  },
+  cuposTotales: {
+    type: Number,
+    required: true,
+    min: 1,
+    default: 30
+  },
+  horarios: {
+    manana: String,
+    tarde: String
   },
   imagenPrincipal: {
     type: String,
@@ -18,38 +46,9 @@ const courseSchema = new mongoose.Schema({
     url: String,
     publicId: String
   }],
-  duracion: {
-    type: String,
-    default: '3 meses'
-  },
-  modalidad: {
-    type: String,
-    default: 'Presencial/Virtual'
-  },
-  precio: {
-    type: String,
-    default: 'Consultar'
-  },
-  horarios: {
-    manana: {
-      type: String,
-      default: '9:00 - 12:00'
-    },
-    tarde: {
-      type: String,
-      default: '14:00 - 17:00'
-    }
-  },
   activo: {
     type: Boolean,
-    default: true
-  },
-  fechaInicio: {
-    type: Date
-  },
-  cuposDisponibles: {
-    type: Number,
-    default: 30
+    default: false
   }
 }, {
   timestamps: true
