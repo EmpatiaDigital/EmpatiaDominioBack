@@ -1,5 +1,6 @@
 const mongoose = require('mongoose');
 
+
 const inscriptionSchema = new mongoose.Schema({
   nombre: {
     type: String,
