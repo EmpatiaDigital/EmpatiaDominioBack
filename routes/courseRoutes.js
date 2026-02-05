@@ -6,8 +6,6 @@ const courseController = require('../controllers/courseController');
 router.get('/active', courseController.getActiveCourse);
 
 // Rutas protegidas (deberías agregar middleware de autenticación)
-// Por ahora las dejo abiertas, pero en producción agrega auth middleware
-
 router.get('/', courseController.getAllCourses);
 router.get('/:id', courseController.getCourseById);
 router.post('/', courseController.createCourse);
@@ -21,5 +19,8 @@ router.delete('/:id/image/gallery/:imageId', courseController.deleteGalleryImage
 
 // Activar/desactivar curso
 router.patch('/:id/toggle-status', courseController.toggleCourseStatus);
+
+// NUEVA RUTA: Obtener inscripciones de un curso
+router.get('/:id/enrollments', courseController.getCourseEnrollments);
 
 module.exports = router;
