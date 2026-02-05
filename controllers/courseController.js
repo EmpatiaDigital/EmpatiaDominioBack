@@ -109,6 +109,28 @@ exports.uploadMainImage = async (req, res) => {
   }
 };
 
+
+// Obtener inscripciones de un curso
+exports.getCourseEnrollments = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const Inscription = require('../models/Inscription');
+    
+    const enrollments = await Inscription.find({ 
+      courseId: id,
+      estado: { $ne: 'cancelado' }
+    }).sort({ createdAt: -1 });
+    
+    res.json(enrollments);
+  } catch (error) {
+    res.status(500).json({ 
+      message: 'Error al obtener inscripciones', 
+      error: error.message 
+    });
+  }
+};
+
+
 // Agregar imagen a galería
 exports.addGalleryImage = async (req, res) => {
   try {
