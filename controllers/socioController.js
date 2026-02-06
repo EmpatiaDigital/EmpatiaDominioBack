@@ -12,8 +12,7 @@ const transporter = nodemailer.createTransport({
   secure: true,
   auth: {
     user: "empatiadigital2025@gmail.com",
-    pass: "ebqd hhyo schf hlxc",
-    // pass: "bxtq qnew iguv hegu",
+    pass: "cpcr sgyc pxrw rgvt",
   },
 });
 
@@ -123,3 +122,4 @@ exports.registrarSocio = async (req, res) => {
     return res.status(500).json({ success: false, message: 'Error del servidor' });
   }
 };
+
