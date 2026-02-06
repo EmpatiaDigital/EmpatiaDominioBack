@@ -1,9 +1,77 @@
 const Inscription = require('../models/Inscription');
 const Course = require('../models/Course');
 const mongoose = require('mongoose');
+const nodemailer = require('nodemailer');
 
+// Transportador con Gmail
+const transporter = nodemailer.createTransport({
+  host: "smtp.gmail.com",
+  port: 465,
+  secure: true,
+  auth: {
+    user: "empatiadigital2025@gmail.com",
+    pass: "ebqd hhyo schf hlxc",
+  },
+});
 
-// Crear nueva inscripción (público) - CON GESTIÓN DE CUPOS
+// Función para enviar email de bienvenida
+const enviarEmailBienvenida = async (inscription, course) => {
+  const mailOptions = {
+    from: '"Empatía Digital" <empatiadigital2025@gmail.com>',
+    to: inscription.email,
+    subject: `¡Gracias por tu interés en ${course.titulo}!`,
+    html: `
+    <div style="font-family: 'Arial', sans-serif; color: #333; background-color: #f9f9f9; padding: 20px; border-radius: 8px; max-width: 600px; margin: auto; border: 1px solid #ddd;">
+      <h2 style="color: #2c3e50; text-align: center;">¡Bienvenido/a a Empatía Digital!</h2>
+      
+      <p style="font-size: 16px; color: #555;">Hola <strong>${inscription.nombre} ${inscription.apellido}</strong>,</p>
+      
+      <p style="font-size: 14px; color: #555; line-height: 1.6;">
+        ¡Gracias por tu interés en nuestro curso <strong>${course.titulo}</strong>! 
+        Estamos muy contentos de que quieras formar parte de esta experiencia de aprendizaje.
+      </p>
+
+      <div style="background-color: #e8f5e9; padding: 15px; border-radius: 6px; margin: 20px 0;">
+        <h3 style="color: #27ae60; margin-top: 0;">📋 Detalles de tu inscripción:</h3>
+        <p style="margin: 5px 0; color: #555;"><strong>Curso:</strong> ${course.titulo}</p>
+        <p style="margin: 5px 0; color: #555;"><strong>Turno preferido:</strong> ${inscription.turnoPreferido}</p>
+        <p style="margin: 5px 0; color: #555;"><strong>Email:</strong> ${inscription.email}</p>
+        <p style="margin: 5px 0; color: #555;"><strong>Celular:</strong> ${inscription.celular}</p>
+      </div>
+
+      <p style="font-size: 14px; color: #555; line-height: 1.6;">
+        Para estar al tanto de todas las novedades, información actualizada del curso y conectar con otros participantes, 
+        te invitamos a sumarte a nuestro grupo de WhatsApp:
+      </p>
+
+      <div style="text-align: center; margin: 30px 0;">
+        <a href="https://chat.whatsapp.com/BMAjGTfb00B5qGMBxehk7X?mode=gi_t" 
+           style="background-color: #25D366; color: white; padding: 15px 30px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 16px; display: inline-block;">
+          📱 Sumate al grupo de WhatsApp ahora
+        </a>
+      </div>
+
+      <p style="font-size: 14px; color: #555; line-height: 1.6;">
+        En breve nos pondremos en contacto contigo para brindarte más información sobre el curso.
+      </p>
+
+      <hr style="border: none; border-top: 1px solid #ddd; margin: 30px 0;">
+
+      <p style="font-size: 13px; color: #777; text-align: center;">
+        Si tenés alguna consulta, no dudes en contactarnos.
+      </p>
+
+      <p style="font-size: 12px; color: #aaa; margin-top: 20px; text-align: center;">
+        Enviado automáticamente por Empatía Digital.
+      </p>
+    </div>
+    `
+  };
+
+  await transporter.sendMail(mailOptions);
+};
+
+// Crear nueva inscripción (público) - CON GESTIÓN DE CUPOS Y ENVÍO DE EMAIL
 exports.createInscription = async (req, res) => {
   // Iniciar sesión de transacción para operaciones atómicas
   const session = await mongoose.startSession();
@@ -82,6 +150,14 @@ exports.createInscription = async (req, res) => {
 
     // Confirmar transacción
     await session.commitTransaction();
+
+    // 📧 Enviar email de bienvenida (fuera de la transacción)
+    try {
+      await enviarEmailBienvenida(inscription, updatedCourse);
+    } catch (emailError) {
+      console.error('Error al enviar email de bienvenida:', emailError);
+      // No fallar la inscripción si el email falla
+    }
 
     res.status(201).json({
       message: 'Inscripción realizada exitosamente',
