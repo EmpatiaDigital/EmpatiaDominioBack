@@ -14,8 +14,6 @@ const userActividadRoutes = require('./routes/userActividad');
 const path = require("path");
 const Post = require("./models/Post");
 
-
-
 const courseRoutes = require('./routes/courseRoutes');
 const inscriptionRoutes = require('./routes/inscriptionRoutes');
 
@@ -57,6 +55,7 @@ mongoose.connect("mongodb+srv://empatiadigital2025:Gali282016@empatia1.s1i7isu.m
 app.listen(process.env.PORT, () => {
   console.log(`Servidor corriendo en el puerto ${process.env.PORT}`);
 });
+
 
 
 
