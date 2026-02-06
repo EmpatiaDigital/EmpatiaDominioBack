@@ -2,6 +2,7 @@ const Inscription = require('../models/Inscription');
 const Course = require('../models/Course');
 const mongoose = require('mongoose');
 
+
 // Crear nueva inscripción (público) - CON GESTIÓN DE CUPOS
 exports.createInscription = async (req, res) => {
   // Iniciar sesión de transacción para operaciones atómicas
