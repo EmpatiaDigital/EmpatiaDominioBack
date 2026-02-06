@@ -71,8 +71,35 @@ const enviarEmailBienvenida = async (inscription, course) => {
   await transporter.sendMail(mailOptions);
 };
 
-// Crear nueva inscripción (público) - CON GESTIÓN DE CUPOS Y ENVÍO DE EMAIL
-exports.createInscription = async (req, res) => {
+// Obtener todas las inscripciones de un curso
+exports.getInscripcionesByCurso = async (req, res) => {
+  try {
+    const { cursoId } = req.params;
+    
+    // Obtener inscripciones activas (no canceladas)
+    const inscripciones = await Inscription.find({ 
+      courseId: cursoId,
+      estado: { $ne: 'cancelado' }
+    })
+      .populate('courseId', 'titulo')
+      .sort({ createdAt: -1 });
+    
+    res.json({
+      success: true,
+      data: inscripciones
+    });
+  } catch (error) {
+    console.error('Error al obtener inscripciones:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error al obtener las inscripciones',
+      error: error.message
+    });
+  }
+};
+
+// Crear una nueva inscripción CON TRANSACCIONES ATÓMICAS Y ENVÍO DE EMAIL
+exports.crearInscripcion = async (req, res) => {
   // Iniciar sesión de transacción para operaciones atómicas
   const session = await mongoose.startSession();
   session.startTransaction();
@@ -81,35 +108,43 @@ exports.createInscription = async (req, res) => {
     const { nombre, apellido, email, celular, turnoPreferido, aceptaTerminos, courseId } = req.body;
 
     // Validar que el curso exista y esté activo
-    const course = await Course.findById(courseId).session(session);
-    if (!course) {
+    const curso = await Course.findById(courseId).session(session);
+    if (!curso) {
       await session.abortTransaction();
-      return res.status(404).json({ message: 'Curso no encontrado' });
+      return res.status(404).json({
+        success: false,
+        message: 'Curso no encontrado'
+      });
     }
     
-    if (!course.activo) {
+    if (!curso.activo) {
       await session.abortTransaction();
-      return res.status(400).json({ message: 'El curso no está disponible para inscripciones' });
+      return res.status(400).json({
+        success: false,
+        message: 'El curso no está disponible para inscripciones'
+      });
     }
 
     // Verificar cupos disponibles
-    if (course.cuposDisponibles <= 0) {
+    if (curso.cuposDisponibles <= 0) {
       await session.abortTransaction();
-      return res.status(400).json({ 
-        message: 'No hay cupos disponibles para este curso' 
+      return res.status(400).json({
+        success: false,
+        message: 'No hay cupos disponibles para este curso'
       });
     }
 
     // Verificar si ya existe una inscripción con este email para este curso
-    const existingInscription = await Inscription.findOne({ 
+    const inscripcionExistente = await Inscription.findOne({ 
       email, 
       courseId 
     }).session(session);
 
-    if (existingInscription) {
+    if (inscripcionExistente) {
       await session.abortTransaction();
-      return res.status(400).json({ 
-        message: 'Ya existe una inscripción con este email para este curso' 
+      return res.status(400).json({
+        success: false,
+        message: 'Ya existe una inscripción con este email para este curso'
       });
     }
 
@@ -130,38 +165,41 @@ exports.createInscription = async (req, res) => {
 
     if (!updatedCourse) {
       await session.abortTransaction();
-      return res.status(400).json({ 
-        message: 'No hay cupos disponibles (otro usuario acaba de tomar el último cupo)' 
+      return res.status(400).json({
+        success: false,
+        message: 'No hay cupos disponibles (otro usuario acaba de tomar el último cupo)'
       });
     }
 
     // Crear inscripción
-    const inscription = new Inscription({
+    const nuevaInscripcion = new Inscription({
       nombre,
       apellido,
       email,
       celular,
       turnoPreferido,
       aceptaTerminos,
-      courseId
+      courseId,
+      estado: 'pendiente'
     });
 
-    await inscription.save({ session });
+    await nuevaInscripcion.save({ session });
 
     // Confirmar transacción
     await session.commitTransaction();
 
     // 📧 Enviar email de bienvenida (fuera de la transacción)
     try {
-      await enviarEmailBienvenida(inscription, updatedCourse);
+      await enviarEmailBienvenida(nuevaInscripcion, updatedCourse);
     } catch (emailError) {
       console.error('Error al enviar email de bienvenida:', emailError);
       // No fallar la inscripción si el email falla
     }
 
     res.status(201).json({
-      message: 'Inscripción realizada exitosamente',
-      inscription,
+      success: true,
+      message: 'Inscripción registrada exitosamente',
+      data: nuevaInscripcion,
       cuposRestantes: updatedCourse.cuposDisponibles
     });
 
@@ -170,20 +208,353 @@ exports.createInscription = async (req, res) => {
     
     if (error.name === 'ValidationError') {
       const errors = Object.values(error.errors).map(err => err.message);
-      return res.status(400).json({ message: errors.join(', ') });
+      return res.status(400).json({
+        success: false,
+        message: errors.join(', ')
+      });
     }
     
-    console.error('Error en createInscription:', error);
-    res.status(500).json({ 
-      message: 'Error al procesar la inscripción', 
-      error: error.message 
+    console.error('Error en crearInscripcion:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error al procesar la inscripción',
+      error: error.message
     });
   } finally {
     session.endSession();
   }
 };
 
-// Obtener todas las inscripciones (admin)
+// Actualizar estado de inscripción (pendiente, confirmado, cancelado)
+exports.actualizarEstadoInscripcion = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { estado } = req.body;
+
+    if (!['pendiente', 'confirmado', 'cancelado'].includes(estado)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Estado inválido. Debe ser: pendiente, confirmado o cancelado'
+      });
+    }
+
+    const inscripcion = await Inscription.findById(id);
+    
+    if (!inscripcion) {
+      return res.status(404).json({
+        success: false,
+        message: 'Inscripción no encontrada'
+      });
+    }
+
+    const estadoAnterior = inscripcion.estado;
+    inscripcion.estado = estado;
+    await inscripcion.save();
+
+    // Actualizar cupos del curso
+    const curso = await Course.findById(inscripcion.courseId);
+    if (curso) {
+      const inscripcionesActivas = await Inscription.countDocuments({ 
+        courseId: inscripcion.courseId, 
+        estado: { $in: ['pendiente', 'confirmado'] }
+      });
+      
+      curso.cuposDisponibles = curso.cuposTotales - inscripcionesActivas;
+      await curso.save();
+    }
+
+    await inscripcion.populate('courseId', 'titulo');
+
+    res.json({
+      success: true,
+      message: `Estado cambiado de ${estadoAnterior} a ${estado}`,
+      data: inscripcion,
+      cuposDisponibles: curso ? curso.cuposDisponibles : null
+    });
+  } catch (error) {
+    console.error('Error al actualizar estado:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error al actualizar estado',
+      error: error.message
+    });
+  }
+};
+
+// Cancelar inscripción (dar de baja) y liberar cupo
+exports.cancelarInscripcion = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const inscripcion = await Inscription.findById(id);
+    
+    if (!inscripcion) {
+      return res.status(404).json({
+        success: false,
+        message: 'Inscripción no encontrada'
+      });
+    }
+
+    if (inscripcion.estado === 'cancelado') {
+      return res.status(400).json({
+        success: false,
+        message: 'Esta inscripción ya está cancelada'
+      });
+    }
+
+    // Marcar como cancelado
+    inscripcion.estado = 'cancelado';
+    await inscripcion.save();
+
+    // Actualizar cupos disponibles del curso
+    const curso = await Course.findById(inscripcion.courseId);
+    if (curso) {
+      const inscripcionesActivas = await Inscription.countDocuments({ 
+        courseId: inscripcion.courseId, 
+        estado: { $in: ['pendiente', 'confirmado'] }
+      });
+      
+      curso.cuposDisponibles = curso.cuposTotales - inscripcionesActivas;
+      await curso.save();
+    }
+
+    res.json({
+      success: true,
+      message: 'Inscripción cancelada y cupo liberado',
+      cuposLiberados: 1,
+      cuposDisponibles: curso ? curso.cuposDisponibles : null
+    });
+  } catch (error) {
+    console.error('Error al cancelar inscripción:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error al cancelar inscripción',
+      error: error.message
+    });
+  }
+};
+
+// Eliminar inscripción permanentemente CON TRANSACCIONES ATÓMICAS
+exports.eliminarInscripcion = async (req, res) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
+  try {
+    const { id } = req.params;
+
+    const inscripcion = await Inscription.findById(id).session(session);
+    
+    if (!inscripcion) {
+      await session.abortTransaction();
+      return res.status(404).json({
+        success: false,
+        message: 'Inscripción no encontrada'
+      });
+    }
+
+    const cursoId = inscripcion.courseId;
+    const estadoAnterior = inscripcion.estado;
+
+    // Eliminar la inscripción
+    await Inscription.findByIdAndDelete(id).session(session);
+
+    // Si la inscripción estaba activa, devolver el cupo
+    if (estadoAnterior === 'pendiente' || estadoAnterior === 'confirmado') {
+      await Course.findByIdAndUpdate(
+        cursoId,
+        { $inc: { cuposDisponibles: 1 } }, // Incrementa en 1
+        { session }
+      );
+    }
+
+    await session.commitTransaction();
+
+    res.json({
+      success: true,
+      message: 'Inscripción eliminada exitosamente y cupo liberado'
+    });
+  } catch (error) {
+    await session.abortTransaction();
+    console.error('Error al eliminar inscripción:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error al eliminar inscripción',
+      error: error.message
+    });
+  } finally {
+    session.endSession();
+  }
+};
+
+// Obtener una inscripción por ID
+exports.getInscripcionById = async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    const inscripcion = await Inscription.findById(id)
+      .populate('courseId', 'titulo cuposTotales cuposDisponibles');
+    
+    if (!inscripcion) {
+      return res.status(404).json({
+        success: false,
+        message: 'Inscripción no encontrada'
+      });
+    }
+
+    res.json({
+      success: true,
+      data: inscripcion
+    });
+  } catch (error) {
+    console.error('Error al obtener inscripción:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error al obtener la inscripción',
+      error: error.message
+    });
+  }
+};
+
+// Actualizar información de inscripción
+exports.actualizarInscripcion = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { nombre, apellido, email, celular, turnoPreferido, notas } = req.body;
+
+    const inscripcion = await Inscription.findByIdAndUpdate(
+      id,
+      { nombre, apellido, email, celular, turnoPreferido, notas },
+      { new: true, runValidators: true }
+    ).populate('courseId', 'titulo');
+
+    if (!inscripcion) {
+      return res.status(404).json({
+        success: false,
+        message: 'Inscripción no encontrada'
+      });
+    }
+
+    res.json({
+      success: true,
+      message: 'Inscripción actualizada exitosamente',
+      data: inscripcion
+    });
+  } catch (error) {
+    console.error('Error al actualizar inscripción:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error al actualizar la inscripción',
+      error: error.message
+    });
+  }
+};
+
+// Obtener estadísticas de un curso
+exports.getEstadisticasCurso = async (req, res) => {
+  try {
+    const { cursoId } = req.params;
+
+    const totalInscripciones = await Inscription.countDocuments({ courseId: cursoId });
+    const confirmados = await Inscription.countDocuments({ courseId: cursoId, estado: 'confirmado' });
+    const pendientes = await Inscription.countDocuments({ courseId: cursoId, estado: 'pendiente' });
+    const cancelados = await Inscription.countDocuments({ courseId: cursoId, estado: 'cancelado' });
+    const activos = confirmados + pendientes;
+
+    // Estadísticas por turno
+    const turnoManana = await Inscription.countDocuments({ 
+      courseId: cursoId, 
+      turnoPreferido: 'mañana',
+      estado: { $in: ['pendiente', 'confirmado'] }
+    });
+    
+    const turnoTarde = await Inscription.countDocuments({ 
+      courseId: cursoId, 
+      turnoPreferido: 'tarde',
+      estado: { $in: ['pendiente', 'confirmado'] }
+    });
+    
+    const turnoIndistinto = await Inscription.countDocuments({ 
+      courseId: cursoId, 
+      turnoPreferido: 'indistinto',
+      estado: { $in: ['pendiente', 'confirmado'] }
+    });
+
+    const curso = await Course.findById(cursoId);
+
+    res.json({
+      success: true,
+      data: {
+        totalInscripciones,
+        activos,
+        confirmados,
+        pendientes,
+        cancelados,
+        cuposDisponibles: curso ? curso.cuposDisponibles : 0,
+        cuposTotales: curso ? curso.cuposTotales : 0,
+        porTurno: {
+          manana: turnoManana,
+          tarde: turnoTarde,
+          indistinto: turnoIndistinto
+        }
+      }
+    });
+  } catch (error) {
+    console.error('Error al obtener estadísticas:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error al obtener estadísticas',
+      error: error.message
+    });
+  }
+};
+
+// Sincronizar cupos de un curso (útil para corregir inconsistencias)
+exports.sincronizarCupos = async (req, res) => {
+  try {
+    const { cursoId } = req.params;
+
+    const curso = await Course.findById(cursoId);
+    if (!curso) {
+      return res.status(404).json({
+        success: false,
+        message: 'Curso no encontrado'
+      });
+    }
+
+    // Contar inscripciones activas
+    const inscripcionesActivas = await Inscription.countDocuments({ 
+      courseId: cursoId, 
+      estado: { $in: ['pendiente', 'confirmado'] }
+    });
+
+    // Actualizar cupos disponibles
+    curso.cuposDisponibles = curso.cuposTotales - inscripcionesActivas;
+    await curso.save();
+
+    res.json({
+      success: true,
+      message: 'Cupos sincronizados correctamente',
+      data: {
+        cuposTotales: curso.cuposTotales,
+        inscripcionesActivas,
+        cuposDisponibles: curso.cuposDisponibles
+      }
+    });
+  } catch (error) {
+    console.error('Error al sincronizar cupos:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error al sincronizar cupos',
+      error: error.message
+    });
+  }
+};
+
+// ============================================================
+// FUNCIONES ADICIONALES PARA COMPATIBILIDAD CON ROUTES EXISTENTES
+// ============================================================
+
+// Obtener todas las inscripciones con filtros (admin)
 exports.getAllInscriptions = async (req, res) => {
   try {
     const { courseId, estado, search } = req.query;
@@ -220,44 +591,47 @@ exports.getAllInscriptions = async (req, res) => {
   }
 };
 
-// Obtener inscripción por ID
-exports.getInscriptionById = async (req, res) => {
-  try {
-    const inscription = await Inscription.findById(req.params.id)
-      .populate('courseId');
-    
-    if (!inscription) {
-      return res.status(404).json({ message: 'Inscripción no encontrada' });
-    }
-
-    res.json(inscription);
-  } catch (error) {
-    res.status(500).json({ 
-      message: 'Error al obtener inscripción', 
-      error: error.message 
-    });
-  }
+// Crear inscripción pública (alias para compatibilidad)
+exports.createInscription = async (req, res) => {
+  return exports.crearInscripcion(req, res);
 };
 
-// Actualizar estado de inscripción (admin)
+// Obtener inscripción por ID (alias para compatibilidad)
+exports.getInscriptionById = async (req, res) => {
+  return exports.getInscripcionById(req, res);
+};
+
+// Actualizar estado de inscripción (alias para compatibilidad)
 exports.updateInscriptionStatus = async (req, res) => {
   try {
     const { id } = req.params;
     const { estado, notas } = req.body;
 
-    const inscription = await Inscription.findByIdAndUpdate(
+    const inscripcion = await Inscription.findByIdAndUpdate(
       id,
       { estado, notas },
       { new: true, runValidators: true }
     ).populate('courseId');
 
-    if (!inscription) {
+    if (!inscripcion) {
       return res.status(404).json({ message: 'Inscripción no encontrada' });
+    }
+
+    // Actualizar cupos si cambió el estado
+    const curso = await Course.findById(inscripcion.courseId);
+    if (curso) {
+      const inscripcionesActivas = await Inscription.countDocuments({ 
+        courseId: inscripcion.courseId, 
+        estado: { $in: ['pendiente', 'confirmado'] }
+      });
+      
+      curso.cuposDisponibles = curso.cuposTotales - inscripcionesActivas;
+      await curso.save();
     }
 
     res.json({
       message: 'Estado actualizado exitosamente',
-      inscription
+      inscription: inscripcion
     });
   } catch (error) {
     res.status(400).json({ 
@@ -267,69 +641,17 @@ exports.updateInscriptionStatus = async (req, res) => {
   }
 };
 
-// Actualizar inscripción completa (admin)
+// Actualizar inscripción completa (alias para compatibilidad)
 exports.updateInscription = async (req, res) => {
-  try {
-    const inscription = await Inscription.findByIdAndUpdate(
-      req.params.id,
-      req.body,
-      { new: true, runValidators: true }
-    ).populate('courseId');
-
-    if (!inscription) {
-      return res.status(404).json({ message: 'Inscripción no encontrada' });
-    }
-
-    res.json({
-      message: 'Inscripción actualizada exitosamente',
-      inscription
-    });
-  } catch (error) {
-    res.status(400).json({ 
-      message: 'Error al actualizar inscripción', 
-      error: error.message 
-    });
-  }
+  return exports.actualizarInscripcion(req, res);
 };
 
-// Eliminar inscripción (admin) - DEVUELVE EL CUPO AL CURSO
+// Eliminar inscripción (alias para compatibilidad)
 exports.deleteInscription = async (req, res) => {
-  const session = await mongoose.startSession();
-  session.startTransaction();
-
-  try {
-    const inscription = await Inscription.findById(req.params.id).session(session);
-    
-    if (!inscription) {
-      await session.abortTransaction();
-      return res.status(404).json({ message: 'Inscripción no encontrada' });
-    }
-
-    // Devolver el cupo al curso
-    await Course.findByIdAndUpdate(
-      inscription.courseId,
-      { $inc: { cuposDisponibles: 1 } }, // Incrementa en 1
-      { session }
-    );
-
-    // Eliminar inscripción
-    await Inscription.findByIdAndDelete(req.params.id).session(session);
-
-    await session.commitTransaction();
-
-    res.json({ message: 'Inscripción eliminada exitosamente y cupo liberado' });
-  } catch (error) {
-    await session.abortTransaction();
-    res.status(500).json({ 
-      message: 'Error al eliminar inscripción', 
-      error: error.message 
-    });
-  } finally {
-    session.endSession();
-  }
+  return exports.eliminarInscripcion(req, res);
 };
 
-// Obtener estadísticas (admin)
+// Obtener estadísticas (versión alternativa para compatibilidad)
 exports.getStatistics = async (req, res) => {
   try {
     const { courseId } = req.query;
