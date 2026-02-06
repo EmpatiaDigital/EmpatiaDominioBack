@@ -10,8 +10,7 @@ const transporter = nodemailer.createTransport({
   secure: true,
   auth: {
     user: "empatiadigital2025@gmail.com",
-    pass: "ebqd hhyo schf hlxc",
-    // pass: "bxtq qnew iguv hegu",
+    pass: "cpcr sgyc pxrw rgvt",
   },
 });
 
@@ -130,3 +129,4 @@ module.exports = {
   changePassword,
   changePasswordLoggedIn,
 };
+
