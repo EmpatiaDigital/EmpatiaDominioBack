@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const inscripcionController = require('../controllers/inscripcionController');
+const inscripcionController = require('../controllers/inscriptionController');
 
 // Rutas para inscripciones
 router.get('/curso/:cursoId', inscripcionController.getInscripcionesByCurso);
