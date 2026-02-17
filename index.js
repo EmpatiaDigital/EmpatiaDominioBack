@@ -20,6 +20,7 @@ const inscriptionRoutes = require('./routes/inscriptionRoutes');
 // Usamos las rutas
 dotenv.config();
 const app = express();
+
 // Middleware
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ limit: '10mb', extended: true }));
@@ -54,6 +55,7 @@ mongoose.connect("mongodb+srv://empatiadigital2025:Gali282016@empatia1.s1i7isu.m
 app.listen(process.env.PORT, () => {
   console.log(`Servidor corriendo en el puerto ${process.env.PORT}`);
 });
+
 
 
 
