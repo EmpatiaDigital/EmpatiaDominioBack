@@ -28,8 +28,8 @@ app.use(cors());
 app.use(express.urlencoded({ extended: true }));
 app.use("/descargas", express.static(path.join(__dirname, "public/descargas")));
 // Rutas
-app.get('/api', (req, res) => {
-  res.send('Ahora sí estoy');
+app.get('/', (req, res) => {
+  res.send('Ahora sí estoy Backend');
 });
 app.use('/api', changePassword);
 app.use('/api/auth', authRoutes);
@@ -55,6 +55,7 @@ mongoose.connect("mongodb+srv://empatiadigital2025:Gali282016@empatia1.s1i7isu.m
 app.listen(process.env.PORT, () => {
   console.log(`Servidor corriendo en el puerto ${process.env.PORT}`);
 });
+
 
 
 
