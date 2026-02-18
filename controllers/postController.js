@@ -143,3 +143,52 @@ exports.eliminarPost = async (req, res) => {
   }
 };
 
+
+
+exports.previewPost = async (req, res) => {
+  try {
+    const post = await Post.findById(req.params.PostId);
+    if (!post) return res.status(404).send('<h1>Post no encontrado</h1>');
+
+    const titulo = post.titulo || 'Empatía Digital';
+    const descripcion = post.epigrafe || 'Leé este artículo en Empatía Digital';
+    const imagen = post.portada || 'https://empatiadigital.com.ar/og-default.jpg';
+    const url = `https://www.empatiadigital.com.ar/post/${post._id}`;
+
+    res.setHeader('Content-Type', 'text/html');
+    res.send(`<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <title>${titulo}</title>
+  <meta name="description" content="${descripcion}" />
+
+  <!-- Open Graph (Facebook, WhatsApp, etc.) -->
+  <meta property="og:type" content="article" />
+  <meta property="og:title" content="${titulo}" />
+  <meta property="og:description" content="${descripcion}" />
+  <meta property="og:image" content="${imagen}" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
+  <meta property="og:url" content="${url}" />
+  <meta property="og:site_name" content="Empatía Digital" />
+
+  <!-- Twitter Card -->
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="${titulo}" />
+  <meta name="twitter:description" content="${descripcion}" />
+  <meta name="twitter:image" content="${imagen}" />
+
+  <!-- Redirige al frontend después de que el crawler haya leído los meta tags -->
+  <meta http-equiv="refresh" content="0;url=${url}" />
+</head>
+<body>
+  <p>Redirigiendo a <a href="${url}">${titulo}</a>...</p>
+</body>
+</html>`);
+  } catch (error) {
+    console.error(error);
+    res.status(500).send('<h1>Error</h1>');
+  }
+};
+
