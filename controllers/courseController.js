@@ -1,7 +1,6 @@
 const Course = require('../models/Course');
 const cloudinary = require('cloudinary').v2;
 
-// Configuración de Cloudinary (asegúrate de tener las variables de entorno)
 cloudinary.config({
   cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
   api_key: process.env.CLOUDINARY_API_KEY,
@@ -44,10 +43,14 @@ exports.getCourseById = async (req, res) => {
   }
 };
 
-// Crear un nuevo curso
+// ✅ Crear un nuevo curso — cuposTotal se iguala a cuposDisponibles si no viene
 exports.createCourse = async (req, res) => {
   try {
-    const course = new Course(req.body);
+    const body = { ...req.body };
+    if (!body.cuposTotal && body.cuposDisponibles) {
+      body.cuposTotal = body.cuposDisponibles;
+    }
+    const course = new Course(body);
     await course.save();
     res.status(201).json(course);
   } catch (error) {
@@ -55,12 +58,19 @@ exports.createCourse = async (req, res) => {
   }
 };
 
-// Actualizar curso
+// ✅ Actualizar curso — si no tiene cuposTotal lo setea desde cuposDisponibles
 exports.updateCourse = async (req, res) => {
   try {
+    const body = { ...req.body };
+    if (!body.cuposTotal) {
+      const existing = await Course.findById(req.params.id);
+      if (existing && !existing.cuposTotal && body.cuposDisponibles) {
+        body.cuposTotal = body.cuposDisponibles;
+      }
+    }
     const course = await Course.findByIdAndUpdate(
       req.params.id,
-      req.body,
+      body,
       { new: true, runValidators: true }
     );
     if (!course) {
@@ -76,19 +86,17 @@ exports.updateCourse = async (req, res) => {
 exports.uploadMainImage = async (req, res) => {
   try {
     const { id } = req.params;
-    const { image } = req.body; // Base64 image
+    const { image } = req.body;
 
     if (!image) {
       return res.status(400).json({ message: 'No se proporcionó imagen' });
     }
 
-    // Subir a Cloudinary
     const uploadResponse = await cloudinary.uploader.upload(image, {
       folder: 'courses',
       resource_type: 'image'
     });
 
-    // Actualizar curso
     const course = await Course.findByIdAndUpdate(
       id,
       { imagenPrincipal: uploadResponse.secure_url },
@@ -109,27 +117,22 @@ exports.uploadMainImage = async (req, res) => {
   }
 };
 
-
 // Obtener inscripciones de un curso
 exports.getCourseEnrollments = async (req, res) => {
   try {
     const { id } = req.params;
     const Inscription = require('../models/Inscription');
-    
+
     const enrollments = await Inscription.find({ 
       courseId: id,
       estado: { $ne: 'cancelado' }
     }).sort({ createdAt: -1 });
-    
+
     res.json(enrollments);
   } catch (error) {
-    res.status(500).json({ 
-      message: 'Error al obtener inscripciones', 
-      error: error.message 
-    });
+    res.status(500).json({ message: 'Error al obtener inscripciones', error: error.message });
   }
 };
-
 
 // Agregar imagen a galería
 exports.addGalleryImage = async (req, res) => {
@@ -163,10 +166,7 @@ exports.addGalleryImage = async (req, res) => {
       return res.status(404).json({ message: 'Curso no encontrado' });
     }
 
-    res.json({
-      message: 'Imagen agregada a la galería',
-      course
-    });
+    res.json({ message: 'Imagen agregada a la galería', course });
   } catch (error) {
     res.status(500).json({ message: 'Error al agregar imagen', error: error.message });
   }
@@ -187,19 +187,14 @@ exports.deleteGalleryImage = async (req, res) => {
       return res.status(404).json({ message: 'Imagen no encontrada' });
     }
 
-    // Eliminar de Cloudinary
     if (imageToDelete.publicId) {
       await cloudinary.uploader.destroy(imageToDelete.publicId);
     }
 
-    // Eliminar del array
     course.imagenesGaleria.pull(imageId);
     await course.save();
 
-    res.json({
-      message: 'Imagen eliminada',
-      course
-    });
+    res.json({ message: 'Imagen eliminada', course });
   } catch (error) {
     res.status(500).json({ message: 'Error al eliminar imagen', error: error.message });
   }
@@ -213,7 +208,6 @@ exports.toggleCourseStatus = async (req, res) => {
       return res.status(404).json({ message: 'Curso no encontrado' });
     }
 
-    // Si se está activando este curso, desactivar los demás
     if (!course.activo) {
       await Course.updateMany({ _id: { $ne: course._id } }, { activo: false });
     }
