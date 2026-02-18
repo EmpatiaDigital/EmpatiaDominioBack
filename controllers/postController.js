@@ -182,8 +182,8 @@ exports.previewPost = async (req, res) => {
   <meta property="og:title"            content="${titulo}"/>
   <meta property="og:description"      content="${descripcion}"/>
   <meta property="og:url"              content="${frontUrl}"/>
-  <meta property="og:image"            content="${imagen}"/>
-  <meta property="og:image:secure_url" content="${imagen}"/>
+  <meta property="og:image"            content="${imagenRaw}"/>
+  <meta property="og:image:secure_url" content="${imagenRaw}"/>
   <meta property="og:image:type"       content="image/jpeg"/>
   <meta property="og:image:width"      content="1200"/>
   <meta property="og:image:height"     content="630"/>
@@ -191,7 +191,7 @@ exports.previewPost = async (req, res) => {
   <meta name="twitter:card"            content="summary_large_image"/>
   <meta name="twitter:title"           content="${titulo}"/>
   <meta name="twitter:description"     content="${descripcion}"/>
-  <meta name="twitter:image"           content="${imagen}"/>
+  <meta name="twitter:image"           content="${imagenRaw}"/>
 </head>
 <body>
   <h1>${titulo}</h1>
@@ -407,3 +407,4 @@ exports.previewPost = async (req, res) => {
     res.status(500).send('<h1>Error al cargar el post</h1>');
   }
 };
+
