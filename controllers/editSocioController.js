@@ -6,11 +6,6 @@ const { cloudinary } = require('../utils/cloudinary');;
 
 const editSocio = async (req, res) => {
   try {
-    console.log('=== DATOS RECIBIDOS EN BACKEND ===');
-    console.log('Body:', req.body);
-    console.log('File:', req.file);
-    console.log('Headers Authorization:', req.headers.authorization ? 'Presente' : 'Ausente');
-
     const {
       _id,
       nombre,
@@ -39,8 +34,6 @@ const editSocio = async (req, res) => {
       });
     }
 
-    console.log('✅ Socio encontrado:', socio.nombre, socio.apellido);
-
     // Guardamos valores anteriores para compararlos
     const autorViejo = `${socio.nombre?.trim() || ''} ${socio.apellido?.trim() || ''}`.trim();
     const avatarViejo = socio.avatar;
@@ -51,14 +44,6 @@ const editSocio = async (req, res) => {
     if (telefono !== undefined) socio.telefono = telefono;
     if (provincia !== undefined) socio.provincia = provincia;
     if (ciudad !== undefined) socio.ciudad = ciudad;
-
-    console.log('📝 Datos a actualizar:', {
-      nombre: socio.nombre,
-      apellido: socio.apellido,
-      telefono: socio.telefono,
-      provincia: socio.provincia,
-      ciudad: socio.ciudad
-    });
 
     // Si hay nuevo avatar
     if (req.file) {
@@ -108,7 +93,6 @@ const editSocio = async (req, res) => {
 
     console.log('💾 Guardando socio...');
     await socio.save();
-    console.log('✅ Socio guardado correctamente');
 
     const autorNuevo = `${socio.nombre?.trim() || ''} ${socio.apellido?.trim() || ''}`.trim();
 
@@ -167,7 +151,3 @@ const editSocio = async (req, res) => {
 };
 
 module.exports = { editSocio };
-
-
-
-
