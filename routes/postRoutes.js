@@ -7,7 +7,7 @@ router.post('/posts', postController.crearPost);
 
 // Enviar un post por ID
 
-router.get('/post/share/:PostId', postController.previewPost);
+router.get('/post/:PostId', postController.previewPost);
 
 // Obtener todos los posts
 router.get('/posts', postController.obtenerPosts);
@@ -24,6 +24,7 @@ router.delete('/posts/:PostId', postController.eliminarPost);
 
 
 module.exports = router;
+
 
 
 
