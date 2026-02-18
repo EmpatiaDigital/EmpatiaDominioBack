@@ -1,6 +1,5 @@
 const Socio = require('../models/Socio');
 const Post = require('../models/Post');
-const { cloudinary } = require('../utils/cloudinary');
 const cloudinary = require('cloudinary').v2;
 
 // Forzar config directo acá
@@ -174,4 +173,5 @@ const editSocio = async (req, res) => {
 };
 
 module.exports = { editSocio };
+
 
