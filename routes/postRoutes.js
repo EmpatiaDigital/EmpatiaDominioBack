@@ -5,15 +5,11 @@ const postController = require('../controllers/postController');
 // Crear un nuevo post
 router.post('/posts', postController.crearPost);
 
-// Enviar un post por ID
-
-router.get('/post/:PostId', postController.previewPost);
-
 // Obtener todos los posts
 router.get('/posts', postController.obtenerPosts);
 
 // Obtener un post por ID
-router.get('/posts/:PostId', postController.obtenerPostPorId);
+router.get('/posts/:PostId', postController.obtenerPostPorId,postController.previewPost);
 
 // Actualizar un post por ID
 router.put('/posts/:PostId', postController.actualizarPost);
@@ -24,6 +20,7 @@ router.delete('/posts/:PostId', postController.eliminarPost);
 
 
 module.exports = router;
+
 
 
 
