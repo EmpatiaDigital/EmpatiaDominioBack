@@ -1,10 +1,19 @@
 const Socio = require('../models/Socio');
 const Post = require('../models/Post');
 const { cloudinary } = require('../utils/cloudinary');
+const cloudinary = require('cloudinary').v2;
+
+// Forzar config directo acá
+cloudinary.config({
+  cloud_name: "dnodisza5",
+  api_key: "713585429952622",
+  api_secret: "Xi0UEkmnjB6PllVt2W5871s8pJ0",
+});
 
 const editSocio = async (req, res) => {
   try {
     console.log('=== DATOS RECIBIDOS EN BACKEND ===');
+     console.log('API KEY EN USO PARA PROAR EL BACKEND SERIA ESO:', config.api_key);
     console.log('Body:', req.body);
     console.log('File:', req.file);
     console.log('Headers Authorization:', req.headers.authorization ? 'Presente' : 'Ausente');
@@ -165,3 +174,4 @@ const editSocio = async (req, res) => {
 };
 
 module.exports = { editSocio };
+
