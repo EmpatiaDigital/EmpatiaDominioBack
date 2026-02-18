@@ -7,7 +7,6 @@ const { cloudinary } = require('../utils/cloudinary');;
 const editSocio = async (req, res) => {
   try {
     console.log('=== DATOS RECIBIDOS EN BACKEND ===');
-     console.log('API KEY EN USO PARA PROAR EL BACKEND SERIA ESO:', config.api_key);
     console.log('Body:', req.body);
     console.log('File:', req.file);
     console.log('Headers Authorization:', req.headers.authorization ? 'Presente' : 'Ausente');
@@ -168,6 +167,7 @@ const editSocio = async (req, res) => {
 };
 
 module.exports = { editSocio };
+
 
 
 
