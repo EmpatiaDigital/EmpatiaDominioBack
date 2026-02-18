@@ -150,7 +150,7 @@ exports.eliminarPost = async (req, res) => {
 exports.previewPost = async (req, res) => {
   await connectDB();
   try {
-    const post = await Post.findById(req.params.PostId);
+    const post = await Post.findById(req.params.id);
     if (!post) return res.status(404).send('<h1>Post no encontrado</h1>');
 
     const userAgent = req.headers['user-agent'] || '';
@@ -407,4 +407,5 @@ exports.previewPost = async (req, res) => {
     res.status(500).send('<h1>Error al cargar el post</h1>');
   }
 };
+
 
