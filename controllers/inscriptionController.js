@@ -709,4 +709,3 @@ exports.getStatistics = async (req, res) => {
     });
   }
 };
- cupos de los cursos para crear y para poder hacer actualizacioens
