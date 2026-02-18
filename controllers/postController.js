@@ -145,23 +145,23 @@ exports.eliminarPost = async (req, res) => {
 
 
 
+
+
 exports.previewPost = async (req, res) => {
-  await connectDB(); // si usás el helper de conexión
+  await connectDB();
   try {
     const post = await Post.findById(req.params.PostId);
     if (!post) return res.status(404).send('<h1>Post no encontrado</h1>');
 
     const userAgent = req.headers['user-agent'] || '';
-
-    // Detectar crawlers de redes sociales
     const esCrawler = /facebookexternalhit|whatsapp|twitterbot|linkedinbot|slackbot|telegrambot|ia_archiver|Discordbot/i.test(userAgent);
 
-    const titulo   = (post.titulo    || 'Empatía Digital').replace(/[<>"]/g, '');
-    const descripcion = (post.epigrafe || 'Leé este artículo en Empatía Digital').replace(/[<>"]/g, '');
-    const imagen   = post.portada    || 'https://www.empatiadigital.com.ar/empatialogo.jpg';
-    const frontUrl = `https://www.empatiadigital.com.ar/post/${post._id}`;
+    const titulo     = (post.titulo   || 'Empatía Digital').replace(/[<>"&]/g, c => ({'<':'&lt;','>':'&gt;','"':'&quot;','&':'&amp;'}[c]));
+    const descripcion= (post.epigrafe || 'Leé este artículo en Empatía Digital').replace(/[<>"&]/g, c => ({'<':'&lt;','>':'&gt;','"':'&quot;','&':'&amp;'}[c]));
+    const imagen     = post.portada   || 'https://www.empatiadigital.com.ar/empatialogo.jpg';
+    const frontUrl   = `https://www.empatiadigital.com.ar/post/${post._id}`;
 
-    // ── Crawlers: solo meta tags, sin JS ──────────────────────────────────
+    // ── CRAWLERS ─────────────────────────────────────────────────────────
     if (esCrawler) {
       res.setHeader('Content-Type', 'text/html; charset=utf-8');
       return res.send(`<!DOCTYPE html>
@@ -170,56 +170,57 @@ exports.previewPost = async (req, res) => {
   <meta charset="UTF-8"/>
   <title>${titulo} | Empatía Digital</title>
   <meta name="description" content="${descripcion}"/>
-  <meta property="og:type"                content="article"/>
-  <meta property="og:site_name"           content="Empatía Digital"/>
-  <meta property="og:title"              content="${titulo}"/>
-  <meta property="og:description"        content="${descripcion}"/>
-  <meta property="og:url"                content="${frontUrl}"/>
-  <meta property="og:image"              content="${imagen}"/>
-  <meta property="og:image:secure_url"   content="${imagen}"/>
-  <meta property="og:image:type"         content="image/jpeg"/>
-  <meta property="og:image:width"        content="1200"/>
-  <meta property="og:image:height"       content="630"/>
-  <meta property="og:image:alt"          content="${titulo}"/>
-  <meta name="twitter:card"              content="summary_large_image"/>
-  <meta name="twitter:title"             content="${titulo}"/>
-  <meta name="twitter:description"       content="${descripcion}"/>
-  <meta name="twitter:image"             content="${imagen}"/>
+  <meta property="og:type"              content="article"/>
+  <meta property="og:site_name"         content="Empatía Digital"/>
+  <meta property="og:title"             content="${titulo}"/>
+  <meta property="og:description"       content="${descripcion}"/>
+  <meta property="og:url"               content="${frontUrl}"/>
+  <meta property="og:image"             content="${imagen}"/>
+  <meta property="og:image:secure_url"  content="${imagen}"/>
+  <meta property="og:image:type"        content="image/jpeg"/>
+  <meta property="og:image:width"       content="1200"/>
+  <meta property="og:image:height"      content="630"/>
+  <meta property="og:image:alt"         content="${titulo}"/>
+  <meta name="twitter:card"             content="summary_large_image"/>
+  <meta name="twitter:title"            content="${titulo}"/>
+  <meta name="twitter:description"      content="${descripcion}"/>
+  <meta name="twitter:image"            content="${imagen}"/>
 </head>
 <body>
   <h1>${titulo}</h1>
   <p>${descripcion}</p>
   <img src="${imagen}" alt="${titulo}" style="max-width:600px"/>
-  <br/><a href="${frontUrl}">Ver post completo →</a>
+  <a href="${frontUrl}">Ver post completo →</a>
 </body>
 </html>`);
     }
 
-    // ── Humanos: página con SweetAlert2 y cuenta regresiva ────────────────
+    // ── HUMANOS ───────────────────────────────────────────────────────────
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    // ⚠️ IMPORTANTE: escapamos la URL para usarla dentro del JS del template
+    const frontUrlJS = frontUrl.replace(/'/g, "\\'");
+
     return res.send(`<!DOCTYPE html>
 <html lang="es">
 <head>
   <meta charset="UTF-8"/>
   <title>${titulo} | Empatía Digital</title>
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
-
-  <!-- Open Graph igual, por si alguien comparte este link directamente -->
   <meta property="og:type"              content="article"/>
-  <meta property="og:title"            content="${titulo}"/>
-  <meta property="og:description"      content="${descripcion}"/>
-  <meta property="og:url"              content="${frontUrl}"/>
-  <meta property="og:image"            content="${imagen}"/>
-  <meta property="og:image:secure_url" content="${imagen}"/>
-  <meta property="og:image:type"       content="image/jpeg"/>
-  <meta property="og:image:width"      content="1200"/>
-  <meta property="og:image:height"     content="630"/>
-
+  <meta property="og:title"             content="${titulo}"/>
+  <meta property="og:description"       content="${descripcion}"/>
+  <meta property="og:url"               content="${frontUrl}"/>
+  <meta property="og:image"             content="${imagen}"/>
+  <meta property="og:image:secure_url"  content="${imagen}"/>
+  <meta property="og:image:type"        content="image/jpeg"/>
+  <meta property="og:image:width"       content="1200"/>
+  <meta property="og:image:height"      content="630"/>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css"/>
   <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
+    *, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
+
     body {
-      font-family: 'Segoe UI', sans-serif;
+      font-family: 'Segoe UI', Arial, sans-serif;
       background: linear-gradient(135deg, #1a3a3a 0%, #194542 100%);
       min-height: 100vh;
       display: flex;
@@ -227,148 +228,212 @@ exports.previewPost = async (req, res) => {
       justify-content: center;
       padding: 20px;
     }
+
     .card {
-      background: white;
-      border-radius: 16px;
+      background: #fff;
+      border-radius: 18px;
       overflow: hidden;
-      max-width: 540px;
+      max-width: 520px;
       width: 100%;
-      box-shadow: 0 20px 60px rgba(0,0,0,0.4);
+      box-shadow: 0 24px 64px rgba(0,0,0,0.45);
+      animation: fadeUp 0.5s ease;
     }
-    .card img {
+
+    @keyframes fadeUp {
+      from { opacity:0; transform:translateY(24px); }
+      to   { opacity:1; transform:translateY(0); }
+    }
+
+    /* ── Imagen con fallback de color ── */
+    .img-wrap {
       width: 100%;
-      height: 260px;
+      height: 240px;
+      background: #194542;          /* color si la imagen falla */
+      position: relative;
+      overflow: hidden;
+    }
+    .img-wrap img {
+      width: 100%;
+      height: 100%;
       object-fit: cover;
       display: block;
+      /* sin restricción CORS: cargamos como elemento normal */
     }
-    .card-body {
-      padding: 28px 32px 32px;
+    .img-overlay {
+      position: absolute;
+      bottom: 0; left: 0; right: 0;
+      height: 80px;
+      background: linear-gradient(transparent, rgba(0,0,0,0.55));
     }
+
+    .card-body { padding: 26px 28px 30px; }
+
     .badge {
       display: inline-block;
       background: #e8f5e9;
       color: #194542;
-      font-size: 0.75rem;
+      font-size: 0.72rem;
       font-weight: 700;
       letter-spacing: 1px;
       text-transform: uppercase;
       padding: 4px 12px;
       border-radius: 20px;
-      margin-bottom: 14px;
-    }
-    h1 {
-      font-size: 1.5rem;
-      color: #1a1a1a;
-      line-height: 1.4;
-      margin-bottom: 10px;
-    }
-    p.epigrafe {
-      font-size: 0.95rem;
-      color: #666;
-      font-style: italic;
-      line-height: 1.5;
-      margin-bottom: 24px;
-    }
-    .progress-bar-wrap {
-      background: #e0e0e0;
-      border-radius: 8px;
-      height: 6px;
-      overflow: hidden;
       margin-bottom: 12px;
     }
-    .progress-bar {
+
+    h1 {
+      font-size: 1.4rem;
+      color: #111;
+      line-height: 1.4;
+      margin-bottom: 8px;
+    }
+
+    .epigrafe {
+      font-size: 0.92rem;
+      color: #666;
+      font-style: italic;
+      line-height: 1.55;
+      margin-bottom: 22px;
+    }
+
+    /* ── Barra de progreso ── */
+    .bar-wrap {
+      background: #e5e5e5;
+      border-radius: 99px;
+      height: 7px;
+      overflow: hidden;
+      margin-bottom: 10px;
+    }
+    .bar-inner {
       height: 100%;
-      background: linear-gradient(90deg, #42a5f5, #194542);
-      border-radius: 8px;
       width: 100%;
-      transition: width 1s linear;
+      border-radius: 99px;
+      background: linear-gradient(90deg, #42a5f5, #194542);
+      /* transition se aplica via JS para evitar el bug del primer frame */
     }
-    .redirect-msg {
-      font-size: 0.85rem;
-      color: #999;
+
+    .countdown-msg {
+      font-size: 0.82rem;
+      color: #aaa;
       text-align: center;
-      margin-bottom: 20px;
+      margin-bottom: 18px;
     }
+    .countdown-msg strong { color: #194542; font-size: 1rem; }
+
     .btn-ir {
       display: block;
       width: 100%;
-      padding: 14px;
+      padding: 13px;
       background: #194542;
-      color: white;
+      color: #fff;
       border: none;
       border-radius: 10px;
-      font-size: 1rem;
-      font-weight: 600;
-      cursor: pointer;
-      text-decoration: none;
+      font-size: 0.97rem;
+      font-weight: 700;
       text-align: center;
-      transition: background 0.2s;
+      text-decoration: none;
+      cursor: pointer;
+      transition: background 0.2s, transform 0.15s;
     }
-    .btn-ir:hover { background: #0f2b29; }
+    .btn-ir:hover  { background: #0f2b29; transform: translateY(-1px); }
+    .btn-ir:active { transform: translateY(0); }
   </style>
 </head>
 <body>
   <div class="card">
-    <img src="${imagen}" alt="${titulo}" onerror="this.style.display='none'"/>
+
+    <div class="img-wrap">
+      <img
+        src="${imagen}"
+        alt="${titulo}"
+        referrerpolicy="no-referrer"
+        crossorigin="anonymous"
+        onerror="this.parentElement.style.background='#194542'; this.remove();"
+      />
+      <div class="img-overlay"></div>
+    </div>
+
     <div class="card-body">
-      <span class="badge">Empatía Digital</span>
+      <span class="badge">✦ Empatía Digital</span>
       <h1>${titulo}</h1>
       <p class="epigrafe">${descripcion}</p>
 
-      <div class="progress-bar-wrap">
-        <div class="progress-bar" id="bar"></div>
+      <div class="bar-wrap">
+        <div class="bar-inner" id="bar"></div>
       </div>
-      <p class="redirect-msg" id="msg">Redirigiendo en <strong id="countdown">4</strong> segundos…</p>
+      <p class="countdown-msg">
+        Redirigiendo en <strong id="num">5</strong> segundos…
+      </p>
 
-      <a href="${frontUrl}" class="btn-ir" id="btnIr">
-        Ir al post ahora →
+      <a href="${frontUrlJS}" class="btn-ir" id="btnIr">
+        Ir al post completo →
       </a>
     </div>
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.all.min.js"></script>
   <script>
-    const frontUrl = "${frontUrl}";
-    let segundos = 4;
-    const bar = document.getElementById('bar');
-    const countdown = document.getElementById('countdown');
+    // ── destino final ────────────────────────────────────────────────────
+    var DEST = '${frontUrlJS}';
 
-    // Animar barra de progreso
-    setTimeout(() => { bar.style.width = '0%'; }, 50);
+    function irAlFront() {
+      window.location.replace(DEST);   // replace para no agregar al historial
+    }
 
-    const intervalo = setInterval(() => {
-      segundos--;
-      countdown.textContent = segundos;
-      if (segundos <= 0) {
-        clearInterval(intervalo);
+    // ── barra de progreso ────────────────────────────────────────────────
+    var TOTAL   = 5;          // segundos
+    var restantes = TOTAL;
+    var bar  = document.getElementById('bar');
+    var num  = document.getElementById('num');
+
+    // Activar la transición en el siguiente frame (evita el bug de primer render)
+    requestAnimationFrame(function() {
+      requestAnimationFrame(function() {
+        bar.style.transition = 'width ' + TOTAL + 's linear';
+        bar.style.width = '0%';
+      });
+    });
+
+    var tick = setInterval(function() {
+      restantes--;
+      num.textContent = restantes;
+
+      if (restantes <= 0) {
+        clearInterval(tick);
+
+        // ── SweetAlert2 y luego redirigir ────────────────────────────────
         Swal.fire({
           icon: 'success',
-          title: '¡Redirigiendo!',
-          text: 'Te llevamos al post completo…',
-          timer: 1200,
+          title: '¡Todo listo!',
+          html: 'Abriendo el post en <b>Empatía Digital</b>…',
+          timer: 2000,
           timerProgressBar: true,
-          showConfirmButton: false,
+          showConfirmButton: true,
+          confirmButtonText: 'Ir ahora',
+          confirmButtonColor: '#194542',
           background: '#f0faf9',
           color: '#194542',
-          iconColor: '#42a5f5',
-        }).then(() => {
-          window.location.href = frontUrl;
+          iconColor: '#27ae60',
+          // ✅ didClose es el callback correcto — funciona con timer Y con clic
+          didClose: function() {
+            irAlFront();
+          }
         });
       }
     }, 1000);
 
-    // Si hace clic antes de la cuenta
-    document.getElementById('btnIr').addEventListener('click', (e) => {
+    // ── Botón manual ─────────────────────────────────────────────────────
+    document.getElementById('btnIr').addEventListener('click', function(e) {
       e.preventDefault();
-      clearInterval(intervalo);
-      window.location.href = frontUrl;
+      clearInterval(tick);
+      irAlFront();
     });
   </script>
 </body>
 </html>`);
 
   } catch (error) {
-    console.error(error);
+    console.error('previewPost error:', error);
     res.status(500).send('<h1>Error al cargar el post</h1>');
   }
 };
