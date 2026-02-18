@@ -17,4 +17,9 @@ router.put('/posts/:PostId', postController.actualizarPost);
 // Eliminar un post por ID
 router.delete('/posts/:PostId', postController.eliminarPost);
 
+// Enviar un post por ID
+
+router.get('/post/:PostId', postController.previewPost);
+
 module.exports = router;
+
