@@ -22,6 +22,9 @@ const courseSchema = new mongoose.Schema({
     type: String,
     required: true
   },
+  cuposTotal: { 
+    type: Number, 
+    default: 0 },
   cuposDisponibles: {
     type: Number,
     required: true,
