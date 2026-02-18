@@ -1,13 +1,8 @@
 const Socio = require('../models/Socio');
 const Post = require('../models/Post');
-const cloudinary = require('cloudinary').v2;
+const { cloudinary } = require('../utils/cloudinary');;
 
 // Forzar config directo acá
-cloudinary.config({
-  cloud_name: "dnodisza5",
-  api_key: "713585429952622",
-  api_secret: "Xi0UEkmnjB6PllVt2W5871s8pJ0",
-});
 
 const editSocio = async (req, res) => {
   try {
@@ -173,5 +168,6 @@ const editSocio = async (req, res) => {
 };
 
 module.exports = { editSocio };
+
 
 
