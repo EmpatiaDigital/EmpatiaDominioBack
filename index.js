@@ -33,7 +33,7 @@ app.use("/descargas", express.static(path.join(__dirname, "public/descargas")));
 app.get('/', (req, res) => {
   res.send('Ahora sí estoy Backend');
 });
-app.use('/api/sendCode', changePassword);
+app.use('/api', changePassword);
 app.use('/api/auth', authRoutes);
 app.use('/api',sociosRoutes);
 app.use('/api',postRoutes);
@@ -57,6 +57,7 @@ mongoose.connect("mongodb+srv://empatiadigital2025:Gali282016@empatia1.s1i7isu.m
 app.listen(process.env.PORT, () => {
   console.log(`Servidor corriendo en el puerto ${process.env.PORT}`);
 });
+
 
 
 
