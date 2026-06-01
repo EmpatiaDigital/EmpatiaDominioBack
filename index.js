@@ -20,8 +20,6 @@ const inscriptionRoutes = require('./routes/inscriptionRoutes');
 dotenv.config();
 const app = express();
 
-
-
 // Middleware
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ limit: '10mb', extended: true }));
