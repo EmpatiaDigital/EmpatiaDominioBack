@@ -16,7 +16,6 @@ const Post = require("./models/Post");
 
 const courseRoutes = require('./routes/courseRoutes');
 const inscriptionRoutes = require('./routes/inscriptionRoutes');
-
 // Usamos las rutas
 dotenv.config();
 const app = express();
