@@ -7,6 +7,23 @@ cloudinary.config({
   api_secret: process.env.CLOUDINARY_API_SECRET
 });
 
+// ── Helper: normaliza los campos de cupos para que siempre estén en sync ──
+const normalizarCupos = (body, existing = null) => {
+  const result = { ...body };
+
+  // El valor "fuente de verdad" es cuposDisponibles (el que edita el admin)
+  const cuposNuevos = result.cuposDisponibles
+    ?? existing?.cuposDisponibles
+    ?? 30;
+
+  // Siempre sincronizar los tres campos
+  result.cuposDisponibles = cuposNuevos;
+  result.cuposTotal       = cuposNuevos;   // campo viejo, mantener igual
+  result.cuposTotales     = cuposNuevos;   // campo nuevo del schema
+
+  return result;
+};
+
 // Obtener el curso activo
 exports.getActiveCourse = async (req, res) => {
   try {
@@ -43,13 +60,10 @@ exports.getCourseById = async (req, res) => {
   }
 };
 
-// ✅ Crear un nuevo curso — cuposTotal se iguala a cuposDisponibles si no viene
+// Crear un nuevo curso
 exports.createCourse = async (req, res) => {
   try {
-    const body = { ...req.body };
-    if (!body.cuposTotal && body.cuposDisponibles) {
-      body.cuposTotal = body.cuposDisponibles;
-    }
+    const body = normalizarCupos(req.body);
     const course = new Course(body);
     await course.save();
     res.status(201).json(course);
@@ -58,24 +72,22 @@ exports.createCourse = async (req, res) => {
   }
 };
 
-// ✅ Actualizar curso — si no tiene cuposTotal lo setea desde cuposDisponibles
+// Actualizar curso — siempre sincroniza los tres campos de cupos
 exports.updateCourse = async (req, res) => {
   try {
-    const body = { ...req.body };
-    if (!body.cuposTotal) {
-      const existing = await Course.findById(req.params.id);
-      if (existing && !existing.cuposTotal && body.cuposDisponibles) {
-        body.cuposTotal = body.cuposDisponibles;
-      }
+    const existing = await Course.findById(req.params.id);
+    if (!existing) {
+      return res.status(404).json({ message: 'Curso no encontrado' });
     }
+
+    const body = normalizarCupos(req.body, existing);
+
     const course = await Course.findByIdAndUpdate(
       req.params.id,
       body,
       { new: true, runValidators: true }
     );
-    if (!course) {
-      return res.status(404).json({ message: 'Curso no encontrado' });
-    }
+
     res.json(course);
   } catch (error) {
     res.status(400).json({ message: 'Error al actualizar el curso', error: error.message });
@@ -123,7 +135,7 @@ exports.getCourseEnrollments = async (req, res) => {
     const { id } = req.params;
     const Inscription = require('../models/Inscription');
 
-    const enrollments = await Inscription.find({ 
+    const enrollments = await Inscription.find({
       courseId: id,
       estado: { $ne: 'cancelado' }
     }).sort({ createdAt: -1 });
