@@ -13,7 +13,6 @@ const descargaRoutes = require('./routes/descargaRoutes');
 const userActividadRoutes = require('./routes/userActividad');
 const path = require("path");
 const Post = require("./models/Post");
-
 const courseRoutes = require('./routes/courseRoutes');
 const inscriptionRoutes = require('./routes/inscriptionRoutes');
 const postStatsRoutes = require('./routes/postStatsRoutes');
