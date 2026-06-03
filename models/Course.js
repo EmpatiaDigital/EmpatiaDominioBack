@@ -22,9 +22,38 @@ const courseSchema = new mongoose.Schema({
     type: String,
     required: true
   },
-  cuposTotal: { 
-    type: Number, 
-    default: 0 },
+  moneda: {
+    type: String,
+    enum: ['ARS', 'USD'],
+    default: 'ARS'
+  },
+  tieneDescuento: {
+    type: Boolean,
+    default: false
+  },
+  descuentoPorcentaje: {
+    type: Number,
+    default: null,
+    min: 1,
+    max: 99
+  },
+  tieneCodigoPromo: {
+    type: Boolean,
+    default: false
+  },
+  codigoPromo: {
+    type: String,
+    default: null,
+    trim: true
+  },
+  fechaInicio: {
+    type: Date,
+    default: null
+  },
+  cuposTotal: {
+    type: Number,
+    default: 0
+  },
   cuposDisponibles: {
     type: Number,
     required: true,
