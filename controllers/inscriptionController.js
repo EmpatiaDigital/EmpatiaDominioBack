@@ -13,7 +13,30 @@ const transporter = nodemailer.createTransport({
   },
 });
 
-const enviarEmailBienvenida = async (inscription, course) => {
+// ─────────────────────────────────────────────────────────────────────────────
+// EMAIL DE BIENVENIDA
+// Si se pasa codigoPromo, se agrega la sección del código en el mismo mail.
+// ─────────────────────────────────────────────────────────────────────────────
+const enviarEmailBienvenida = async (inscription, course, codigoPromo = null) => {
+
+  const seccionCodigo = codigoPromo ? `
+    <div style="margin: 24px 0; border: 2px dashed #f59e0b; border-radius: 10px; background-color: #fffbeb; padding: 20px; text-align: center;">
+      <p style="margin: 0 0 6px 0; font-size: 15px; font-weight: bold; color: #92400e;">
+        🎉 ¡Felicitaciones! Fuiste seleccionado/a al azar para recibir un código promocional exclusivo
+      </p>
+      <p style="margin: 0 0 10px 0; font-size: 13px; color: #78716c;">
+        Entre todos los inscriptos al curso, ¡te tocó a vos!
+      </p>
+      <div style="display: inline-block; background-color: #fde68a; border-radius: 8px; padding: 10px 24px; border: 1.5px solid #f59e0b;">
+        <p style="margin: 0 0 4px 0; font-size: 12px; color: #92400e;">Tu código es:</p>
+        <p style="margin: 0; font-size: 30px; font-weight: 900; color: #b45309; letter-spacing: 5px;">${codigoPromo}</p>
+      </div>
+      <p style="margin: 12px 0 0 0; font-size: 12px; color: #92400e;">
+        Presentá este código al momento de abonar. Es <strong>único y personal</strong>, no lo compartas.
+      </p>
+    </div>
+  ` : '';
+
   const mailOptions = {
     from: '"Empatía Digital" <empatiadigital2025@gmail.com>',
     to: inscription.email,
@@ -33,6 +56,7 @@ const enviarEmailBienvenida = async (inscription, course) => {
         <p style="margin: 5px 0; color: #555;"><strong>Email:</strong> ${inscription.email}</p>
         <p style="margin: 5px 0; color: #555;"><strong>Celular:</strong> ${inscription.celular}</p>
       </div>
+      ${seccionCodigo}
       <p style="font-size: 14px; color: #555; line-height: 1.6;">
         Para estar al tanto de todas las novedades, información actualizada del curso y conectar con otros participantes, 
         te invitamos a sumarte a nuestro grupo de WhatsApp:
@@ -56,9 +80,13 @@ const enviarEmailBienvenida = async (inscription, course) => {
     </div>
     `
   };
+
   await transporter.sendMail(mailOptions);
 };
 
+// ─────────────────────────────────────────────────────────────────────────────
+// GET INSCRIPCIONES BY CURSO
+// ─────────────────────────────────────────────────────────────────────────────
 exports.getInscripcionesByCurso = async (req, res) => {
   try {
     const { cursoId } = req.params;
@@ -75,6 +103,12 @@ exports.getInscripcionesByCurso = async (req, res) => {
   }
 };
 
+// ─────────────────────────────────────────────────────────────────────────────
+// CREAR INSCRIPCIÓN
+// Si el curso tiene código promo activo, se sortea entre todos los inscriptos
+// activos y se incluye el código en el mail de bienvenida del ganador.
+// Solo ese user lo recibe. Luego el código se desactiva del curso.
+// ─────────────────────────────────────────────────────────────────────────────
 exports.crearInscripcion = async (req, res) => {
   const session = await mongoose.startSession();
   session.startTransaction();
@@ -122,8 +156,41 @@ exports.crearInscripcion = async (req, res) => {
     await nuevaInscripcion.save({ session });
     await session.commitTransaction();
 
+    // ── Sorteo de código promo + envío de mails ──
     try {
-      await enviarEmailBienvenida(nuevaInscripcion, updatedCourse);
+      let codigoParaEsteUser = null;
+
+      if (updatedCourse.tieneCodigoPromo && updatedCourse.codigoPromo) {
+        // Obtenemos todas las inscripciones activas del curso (incluida la nueva)
+        const inscripcionesActivas = await Inscription.find({
+          courseId,
+          estado: { $in: ['pendiente', 'confirmado'] }
+        });
+
+        // Sorteo aleatorio entre todas las inscripciones activas
+        const ganadora = inscripcionesActivas[Math.floor(Math.random() * inscripcionesActivas.length)];
+        const esElNuevo = ganadora.email === nuevaInscripcion.email;
+
+        // Si el ganador es el nuevo inscripto, le pasamos el código en su mail de bienvenida
+        if (esElNuevo) {
+          codigoParaEsteUser = updatedCourse.codigoPromo;
+        } else {
+          // Si el ganador es un inscripto anterior, le reenviamos su mail de bienvenida con el código
+          await enviarEmailBienvenida(ganadora, updatedCourse, updatedCourse.codigoPromo);
+        }
+
+        // Desactivamos el código para que no vuelva a sortearse
+        await Course.findByIdAndUpdate(courseId, {
+          tieneCodigoPromo: false,
+          codigoPromo: null
+        });
+
+        console.log(`Código promo enviado a: ${ganadora.email}`);
+      }
+
+      // Mail de bienvenida del nuevo inscripto (con o sin código según sorteo)
+      await enviarEmailBienvenida(nuevaInscripcion, updatedCourse, codigoParaEsteUser);
+
     } catch (emailError) {
       console.error('Error al enviar email de bienvenida:', emailError);
     }
@@ -148,6 +215,9 @@ exports.crearInscripcion = async (req, res) => {
   }
 };
 
+// ─────────────────────────────────────────────────────────────────────────────
+// ACTUALIZAR ESTADO DE INSCRIPCIÓN
+// ─────────────────────────────────────────────────────────────────────────────
 exports.actualizarEstadoInscripcion = async (req, res) => {
   try {
     const { id } = req.params;
@@ -190,6 +260,9 @@ exports.actualizarEstadoInscripcion = async (req, res) => {
   }
 };
 
+// ─────────────────────────────────────────────────────────────────────────────
+// CANCELAR INSCRIPCIÓN
+// ─────────────────────────────────────────────────────────────────────────────
 exports.cancelarInscripcion = async (req, res) => {
   try {
     const { id } = req.params;
@@ -228,6 +301,9 @@ exports.cancelarInscripcion = async (req, res) => {
   }
 };
 
+// ─────────────────────────────────────────────────────────────────────────────
+// ELIMINAR INSCRIPCIÓN
+// ─────────────────────────────────────────────────────────────────────────────
 exports.eliminarInscripcion = async (req, res) => {
   const session = await mongoose.startSession();
   session.startTransaction();
@@ -265,6 +341,9 @@ exports.eliminarInscripcion = async (req, res) => {
   }
 };
 
+// ─────────────────────────────────────────────────────────────────────────────
+// GET INSCRIPCIÓN BY ID
+// ─────────────────────────────────────────────────────────────────────────────
 exports.getInscripcionById = async (req, res) => {
   try {
     const { id } = req.params;
@@ -280,6 +359,9 @@ exports.getInscripcionById = async (req, res) => {
   }
 };
 
+// ─────────────────────────────────────────────────────────────────────────────
+// ACTUALIZAR INSCRIPCIÓN
+// ─────────────────────────────────────────────────────────────────────────────
 exports.actualizarInscripcion = async (req, res) => {
   try {
     const { id } = req.params;
@@ -302,30 +384,30 @@ exports.actualizarInscripcion = async (req, res) => {
   }
 };
 
-// ✅ ESTADISTICAS CORREGIDAS: usa cuposTotal, cuenta por turno con ambas variantes de turno
+// ─────────────────────────────────────────────────────────────────────────────
+// ESTADÍSTICAS DEL CURSO
+// ─────────────────────────────────────────────────────────────────────────────
 exports.getEstadisticasCurso = async (req, res) => {
   try {
     const { cursoId } = req.params;
 
     const totalInscripciones = await Inscription.countDocuments({ courseId: cursoId });
     const confirmados = await Inscription.countDocuments({ courseId: cursoId, estado: 'confirmado' });
-    const pendientes = await Inscription.countDocuments({ courseId: cursoId, estado: 'pendiente' });
-    const cancelados = await Inscription.countDocuments({ courseId: cursoId, estado: 'cancelado' });
+    const pendientes  = await Inscription.countDocuments({ courseId: cursoId, estado: 'pendiente' });
+    const cancelados  = await Inscription.countDocuments({ courseId: cursoId, estado: 'cancelado' });
     const activos = confirmados + pendientes;
 
-    // ✅ acepta tanto 'mañana' como 'manana' por si el frontend envió sin tilde
+    // Acepta tanto 'mañana' como 'manana' por si el frontend envió sin tilde
     const turnoManana = await Inscription.countDocuments({ 
       courseId: cursoId, 
       turnoPreferido: { $in: ['mañana', 'manana'] },
       estado: { $in: ['pendiente', 'confirmado'] }
     });
-
     const turnoTarde = await Inscription.countDocuments({ 
       courseId: cursoId, 
       turnoPreferido: 'tarde',
       estado: { $in: ['pendiente', 'confirmado'] }
     });
-
     const turnoIndistinto = await Inscription.countDocuments({ 
       courseId: cursoId, 
       turnoPreferido: 'indistinto',
@@ -334,8 +416,7 @@ exports.getEstadisticasCurso = async (req, res) => {
 
     const curso = await Course.findById(cursoId);
 
-    // ✅ cuposTotal es el fijo, cuposDisponibles el que se decrementa
-    const cuposTotal = curso ? curso.cuposTotal : 0;
+    const cuposTotal      = curso ? curso.cuposTotal : 0;
     const cuposDisponibles = curso ? Math.max(0, cuposTotal - activos) : 0;
 
     res.json({
@@ -361,6 +442,9 @@ exports.getEstadisticasCurso = async (req, res) => {
   }
 };
 
+// ─────────────────────────────────────────────────────────────────────────────
+// SINCRONIZAR CUPOS
+// ─────────────────────────────────────────────────────────────────────────────
 exports.sincronizarCupos = async (req, res) => {
   try {
     const { cursoId } = req.params;
@@ -371,7 +455,8 @@ exports.sincronizarCupos = async (req, res) => {
     }
 
     const inscripcionesActivas = await Inscription.countDocuments({ 
-      courseId: cursoId, estado: { $in: ['pendiente', 'confirmado'] }
+      courseId: cursoId,
+      estado: { $in: ['pendiente', 'confirmado'] }
     });
 
     curso.cuposDisponibles = curso.cuposTotal - inscripcionesActivas;
@@ -392,22 +477,22 @@ exports.sincronizarCupos = async (req, res) => {
   }
 };
 
-// ============================================================
-// FUNCIONES ADICIONALES PARA COMPATIBILIDAD CON ROUTES EXISTENTES
-// ============================================================
+// ─────────────────────────────────────────────────────────────────────────────
+// FUNCIONES DE COMPATIBILIDAD CON ROUTES EXISTENTES
+// ─────────────────────────────────────────────────────────────────────────────
 
 exports.getAllInscriptions = async (req, res) => {
   try {
     const { courseId, estado, search } = req.query;
     let query = {};
     if (courseId) query.courseId = courseId;
-    if (estado) query.estado = estado;
+    if (estado)   query.estado   = estado;
     if (search) {
       query.$or = [
-        { nombre: { $regex: search, $options: 'i' } },
+        { nombre:   { $regex: search, $options: 'i' } },
         { apellido: { $regex: search, $options: 'i' } },
-        { email: { $regex: search, $options: 'i' } },
-        { celular: { $regex: search, $options: 'i' } }
+        { email:    { $regex: search, $options: 'i' } },
+        { celular:  { $regex: search, $options: 'i' } }
       ];
     }
     const inscriptions = await Inscription.find(query)
@@ -445,7 +530,8 @@ exports.updateInscriptionStatus = async (req, res) => {
     const curso = await Course.findById(inscripcion.courseId);
     if (curso) {
       const inscripcionesActivas = await Inscription.countDocuments({ 
-        courseId: inscripcion.courseId, estado: { $in: ['pendiente', 'confirmado'] }
+        courseId: inscripcion.courseId,
+        estado: { $in: ['pendiente', 'confirmado'] }
       });
       curso.cuposDisponibles = curso.cuposTotal - inscripcionesActivas;
       await curso.save();
@@ -478,12 +564,12 @@ exports.getStatistics = async (req, res) => {
       {
         $group: {
           _id: null,
-          total: { $sum: 1 },
-          pendientes: { $sum: { $cond: [{ $eq: ['$estado', 'pendiente'] }, 1, 0] } },
-          confirmados: { $sum: { $cond: [{ $eq: ['$estado', 'confirmado'] }, 1, 0] } },
-          cancelados: { $sum: { $cond: [{ $eq: ['$estado', 'cancelado'] }, 1, 0] } },
-          turnoManana: { $sum: { $cond: [{ $in: ['$turnoPreferido', ['mañana', 'manana']] }, 1, 0] } },
-          turnoTarde: { $sum: { $cond: [{ $eq: ['$turnoPreferido', 'tarde'] }, 1, 0] } },
+          total:           { $sum: 1 },
+          pendientes:      { $sum: { $cond: [{ $eq: ['$estado', 'pendiente']  }, 1, 0] } },
+          confirmados:     { $sum: { $cond: [{ $eq: ['$estado', 'confirmado'] }, 1, 0] } },
+          cancelados:      { $sum: { $cond: [{ $eq: ['$estado', 'cancelado']  }, 1, 0] } },
+          turnoManana:     { $sum: { $cond: [{ $in: ['$turnoPreferido', ['mañana', 'manana']] }, 1, 0] } },
+          turnoTarde:      { $sum: { $cond: [{ $eq: ['$turnoPreferido', 'tarde']      }, 1, 0] } },
           turnoIndistinto: { $sum: { $cond: [{ $eq: ['$turnoPreferido', 'indistinto'] }, 1, 0] } }
         }
       }
