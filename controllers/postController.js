@@ -3,8 +3,7 @@ const Socio = require('../models/Socio');
 const nodemailer = require('nodemailer');
 
 // ─── Helper de optimización Cloudinary ────────────────────────────────────────
-// Inserta parámetros de transformación en URLs de Cloudinary.
-// Modificado para que no salte si ya tiene otras transformaciones distintas.
+
 const optimizarCloudinary = (url, params = 'f_auto,q_auto,w_800') => {
   if (!url || !url.includes('res.cloudinary.com')) return url;
   // Si ya tiene aplicados f_auto o q_auto por el backend, la dejamos intacta
