@@ -2,6 +2,16 @@ const Post = require('../models/Post');
 const Socio = require('../models/Socio');
 const nodemailer = require('nodemailer');
 
+// ─── Helper de optimización Cloudinary ────────────────────────────────────────
+// Inserta parámetros de transformación en URLs de Cloudinary.
+// Si la URL no es de Cloudinary o ya tiene transformaciones, la devuelve intacta.
+const optimizarCloudinary = (url, params = 'f_auto,q_auto,w_800') => {
+  if (!url || !url.includes('res.cloudinary.com')) return url;
+  if (url.includes('/upload/f_auto') || url.includes('/upload/q_auto')) return url;
+  return url.replace('/upload/', `/upload/${params}/`);
+};
+// ──────────────────────────────────────────────────────────────────────────────
+
 // Transportador con Gmail
 const transporter = nodemailer.createTransport({
   host: "smtp.gmail.com",
@@ -43,6 +53,9 @@ exports.crearPost = async (req, res) => {
     // 🔔 Obtener todos los socios
     const socios = await Socio.find();
 
+    // Portada optimizada para el email (600px de ancho máximo, calidad automática)
+    const portadaEmail = optimizarCloudinary(portada, 'f_auto,q_auto,w_600');
+
     // 🔁 Enviar correo a cada socio
     for (const socio of socios) {
       const mailOptions = {
@@ -58,9 +71,9 @@ exports.crearPost = async (req, res) => {
           
           ${epigrafe ? `<p style="font-style: italic; color: #777;">${epigrafe}</p>` : ''}
       
-          ${portada ? `
+          ${portadaEmail ? `
             <div style="text-align: center; margin: 20px 0;">
-              <img src="${portada}" alt="Portada del post" style="max-width: 100%; width: 100%; height: auto; border-radius: 6px; display: block; margin: 0 auto;" />
+              <img src="${portadaEmail}" alt="Portada del post" style="max-width: 100%; width: 100%; height: auto; border-radius: 6px; display: block; margin: 0 auto;" />
             </div>
           ` : ''}
       
@@ -76,10 +89,8 @@ exports.crearPost = async (req, res) => {
           </p>
         </div>
       `
-      
       };
 
-      // Enviar
       await transporter.sendMail(mailOptions);
     }
 
@@ -115,10 +126,10 @@ exports.obtenerPostPorId = async (req, res) => {
 
 exports.actualizarPost = async (req, res) => {
   try {
-    const { titulo, autor, epigrafe, portada, contenido, imagenes, epigrafes,categoria,fecha } = req.body;
+    const { titulo, autor, epigrafe, portada, contenido, imagenes, epigrafes, categoria, fecha } = req.body;
     const postActualizado = await Post.findByIdAndUpdate(
       req.params.PostId,
-      { titulo, autor, epigrafe, portada, contenido, imagenes, epigrafes,categoria, fecha },
+      { titulo, autor, epigrafe, portada, contenido, imagenes, epigrafes, categoria, fecha },
       { new: true, runValidators: true }
     );
 
@@ -144,19 +155,17 @@ exports.eliminarPost = async (req, res) => {
 };
 
 
-
-
-
 exports.previewPost = async (req, res) => {
   try {
-    const Post = require('../models/Post'); // ajustá el path si es diferente
+    const Post = require('../models/Post');
     const post = await Post.findById(req.params.id);
 
     if (!post) return res.status(404).send('<h1>Post no encontrado</h1>');
 
-    const titulo  = post.titulo  || 'Empatía Digital';
+    const titulo   = post.titulo   || 'Empatía Digital';
     const epigrafe = post.epigrafe || '';
-    const imagen  = post.portada || '';
+    // Portada optimizada para la preview (800px, WebP/auto)
+    const imagen   = optimizarCloudinary(post.portada || '', 'f_auto,q_auto,w_800');
     const frontUrl = `https://www.empatiadigital.com.ar/post/${post._id}`;
 
     res.send(`<!DOCTYPE html>
@@ -247,6 +256,7 @@ exports.previewPost = async (req, res) => {
 <body>
   <div class="card">
     <img class="portada" src="${imagen}" alt="${titulo}"
+         loading="eager" decoding="async"
          onerror="this.style.display='none'"/>
     <div class="body">
       <span class="badge">✦ Empatía Digital</span>
@@ -294,4 +304,3 @@ exports.previewPost = async (req, res) => {
     res.status(500).send(`<h1>Error: ${error.message}</h1>`);
   }
 };
-
