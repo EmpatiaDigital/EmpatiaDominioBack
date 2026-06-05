@@ -4,9 +4,10 @@ const nodemailer = require('nodemailer');
 
 // ─── Helper de optimización Cloudinary ────────────────────────────────────────
 // Inserta parámetros de transformación en URLs de Cloudinary.
-// Si la URL no es de Cloudinary o ya tiene transformaciones, la devuelve intacta.
+// Modificado para que no salte si ya tiene otras transformaciones distintas.
 const optimizarCloudinary = (url, params = 'f_auto,q_auto,w_800') => {
   if (!url || !url.includes('res.cloudinary.com')) return url;
+  // Si ya tiene aplicados f_auto o q_auto por el backend, la dejamos intacta
   if (url.includes('/upload/f_auto') || url.includes('/upload/q_auto')) return url;
   return url.replace('/upload/', `/upload/${params}/`);
 };
@@ -102,21 +103,44 @@ exports.crearPost = async (req, res) => {
   }
 };
 
-
+// ─── OPTIMIZACIÓN EN LISTA GENERAL ───────────────────────────────────────────
 exports.obtenerPosts = async (req, res) => {
   try {
-    const posts = await Post.find().sort({ fecha: -1 });
-    res.json(posts);
+    // .lean() transforma los documentos de Mongoose en objetos JS puros modificables
+    const posts = await Post.find().sort({ fecha: -1 }).lean();
+    
+    const postsOptimizados = posts.map(post => ({
+      ...post,
+      // Portada optimizada para listados / cards de la Home
+      portada: optimizarCloudinary(post.portada, 'f_auto,q_auto,w_600'),
+      // El avatar se achica a 150x150, se recorta al centro (c_fill) y optimiza formato/calidad
+      avatar: optimizarCloudinary(post.avatar, 'f_auto,q_auto,w_150,h_150,c_fill'),
+      // Si tenés un array de imágenes secundarias dentro del post, también las optimizamos
+      imagenes: Array.isArray(post.imagenes) 
+        ? post.imagenes.map(img => optimizarCloudinary(img, 'f_auto,q_auto,w_800'))
+        : post.imagenes
+    }));
+
+    res.json(postsOptimizados);
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: 'Error al obtener los posts' });
   }
 };
 
+// ─── OPTIMIZACIÓN EN DETALLE DE UN POST ──────────────────────────────────────
 exports.obtenerPostPorId = async (req, res) => {
   try {
-    const post = await Post.findById(req.params.PostId);
+    const post = await Post.findById(req.params.PostId).lean();
     if (!post) return res.status(404).json({ error: 'Post no encontrado' });
+
+    // En el detalle del post queremos una resolución más alta para la portada (w_1200)
+    post.portada = optimizarCloudinary(post.portada, 'f_auto,q_auto,w_1200');
+    post.avatar = optimizarCloudinary(post.avatar, 'f_auto,q_auto,w_150,h_150,c_fill');
+    if (Array.isArray(post.imagenes)) {
+      post.imagenes = post.imagenes.map(img => optimizarCloudinary(img, 'f_auto,q_auto,w_1000'));
+    }
+
     res.json(post);
   } catch (error) {
     console.error(error);
@@ -131,9 +155,13 @@ exports.actualizarPost = async (req, res) => {
       req.params.PostId,
       { titulo, autor, epigrafe, portada, contenido, imagenes, epigrafes, categoria, fecha },
       { new: true, runValidators: true }
-    );
+    ).lean(); // Agregamos lean() para poder formatear la respuesta saliente de forma segura
 
     if (!postActualizado) return res.status(404).json({ error: 'Post no encontrado' });
+
+    // Optimizamos la respuesta para que el Front reciba los cambios optimizados al instante
+    postActualizado.portada = optimizarCloudinary(postActualizado.portada, 'f_auto,q_auto,w_1200');
+    postActualizado.avatar = optimizarCloudinary(postActualizado.avatar, 'f_auto,q_auto,w_150,h_150,c_fill');
 
     res.json({ message: 'Post actualizado', post: postActualizado });
   } catch (error) {
