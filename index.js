@@ -43,7 +43,6 @@ app.use('/api', postStatsRoutes);
 app.use('/api/courses', courseRoutes);
 app.use('/api/inscriptions', inscriptionRoutes);
 
-
 // Conexión a la base de datos
 mongoose.connect("mongodb+srv://empatiadigital2025:Gali282016@empatia1.s1i7isu.mongodb.net/?retryWrites=true&w=majority&appName=Empatia1", { useNewUrlParser: true, useUnifiedTopology: true })
   .then(() => console.log('Conectado a MongoDB'))
