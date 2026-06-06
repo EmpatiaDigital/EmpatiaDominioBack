@@ -17,6 +17,7 @@ const courseRoutes = require('./routes/courseRoutes');
 const inscriptionRoutes = require('./routes/inscriptionRoutes');
 const postStatsRoutes = require('./routes/postStatsRoutes');
 
+
 dotenv.config();
 const app = express();
 
