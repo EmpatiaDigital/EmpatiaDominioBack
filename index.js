@@ -17,7 +17,6 @@ const courseRoutes = require('./routes/courseRoutes');
 const inscriptionRoutes = require('./routes/inscriptionRoutes');
 const postStatsRoutes = require('./routes/postStatsRoutes');
 
-
 dotenv.config();
 const app = express();
 
@@ -28,7 +27,7 @@ app.use(cors());
 app.use("/descargas", express.static(path.join(__dirname, "public/descargas")));
 
 // ─── Middleware: bloquea requests a /api si MongoDB no está listo ─────────
-// Esto evita que las queries entren al buffer de Mongoose y hagan timeout.
+
 app.use('/api', (req, res, next) => {
   if (mongoose.connection.readyState !== 1) {
     return res.status(503).json({
