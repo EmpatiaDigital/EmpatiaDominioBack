@@ -1,16 +1,14 @@
+// controllers/postController.js
 const Post = require('../models/Post');
 const Socio = require('../models/Socio');
 const nodemailer = require('nodemailer');
 
 // ─── Helper de optimización Cloudinary ────────────────────────────────────────
-
 const optimizarCloudinary = (url, params = 'f_auto,q_auto,w_800') => {
   if (!url || !url.includes('res.cloudinary.com')) return url;
-  // Si ya tiene aplicados f_auto o q_auto por el backend, la dejamos intacta
   if (url.includes('/upload/f_auto') || url.includes('/upload/q_auto')) return url;
   return url.replace('/upload/', `/upload/${params}/`);
 };
-// ──────────────────────────────────────────────────────────────────────────────
 
 // Transportador con Gmail
 const transporter = nodemailer.createTransport({
@@ -23,6 +21,7 @@ const transporter = nodemailer.createTransport({
   },
 });
 
+// Crear un nuevo post
 exports.crearPost = async (req, res) => {
   try {
     const {
@@ -35,28 +34,16 @@ exports.crearPost = async (req, res) => {
     }
 
     const nuevoPost = new Post({
-      titulo,
-      autor,
-      epigrafe,
-      portada,
-      contenido,
-      imagenes,
-      epigrafes,
-      categoria,
-      avatar,
-      PostId,
+      titulo, autor, epigrafe, portada, contenido,
+      imagenes, epigrafes, categoria, avatar, PostId,
       fecha: fecha || Date.now()
     });
 
     await nuevoPost.save();
 
-    // 🔔 Obtener todos los socios
     const socios = await Socio.find();
-
-    // Portada optimizada para el email (600px de ancho máximo, calidad automática)
     const portadaEmail = optimizarCloudinary(portada, 'f_auto,q_auto,w_600');
 
-    // 🔁 Enviar correo a cada socio
     for (const socio of socios) {
       const mailOptions = {
         from: '"Empatía Digital" <empatiadigital2025@gmail.com>',
@@ -65,75 +52,116 @@ exports.crearPost = async (req, res) => {
         html: `
         <div style="font-family: 'Arial', sans-serif; color: #333; background-color: #f9f9f9; padding: 20px; border-radius: 8px; max-width: 600px; margin: auto; border: 1px solid #ddd;">
           <h2 style="color: #2c3e50; text-align: center;"> Nuevo post en Empatía Digital</h2>
-          
           <h3 style="color: #2980b9;">${titulo}</h3>
           <p style="font-size: 14px; color: #555;"><strong>Autor:</strong> ${autor}</p>
-          
           ${epigrafe ? `<p style="font-style: italic; color: #777;">${epigrafe}</p>` : ''}
-      
           ${portadaEmail ? `
             <div style="text-align: center; margin: 20px 0;">
               <img src="${portadaEmail}" alt="Portada del post" style="max-width: 100%; width: 100%; height: auto; border-radius: 6px; display: block; margin: 0 auto;" />
             </div>
           ` : ''}
-      
           <div style="text-align: center; margin-top: 30px;">
             <a href="https://www.empatiadigital.com.ar/post/${nuevoPost._id}" 
                style="background-color: #27ae60; color: white; padding: 12px 20px; text-decoration: none; border-radius: 6px; font-weight: bold;">
               🔗 Ver el post completo
             </a>
           </div>
-      
           <p style="font-size: 12px; color: #aaa; margin-top: 30px; text-align: center;">
             Enviado automáticamente por Empatía Digital.
           </p>
-        </div>
-      `
+        </div>`
       };
-
       await transporter.sendMail(mailOptions);
     }
 
     res.status(201).json({ message: 'Post creado con éxito y correos enviados', post: nuevoPost });
-
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: 'Error al guardar el post o al enviar los correos' });
   }
 };
 
-// ─── OPTIMIZACIÓN EN LISTA GENERAL ───────────────────────────────────────────
+// ─── OBTENER POSTS (CON FILTRADO, ORDENAMIENTO Y PAGINACIÓN ULTRA OPTIMIZADA) ───
 exports.obtenerPosts = async (req, res) => {
   try {
-    // .lean() transforma los documentos de Mongoose en objetos JS puros modificables
-    const posts = await Post.find().sort({ fecha: -1 }).lean();
+    const page = req.query.page ? parseInt(req.query.page) : null;
+    const limit = req.query.limit ? parseInt(req.query.limit) : null;
+    const categoria = req.query.categoria;
+    const sortParam = req.query.sort;
+
+    // 1. Construcción dinámica del filtro (Soporta strings y vectores de categorías)
+    let filtro = {};
+    if (categoria && categoria.trim() !== "") {
+      filtro.categoria = { $regex: new RegExp("^" + categoria.trim() + "$", "i") };
+    }
+
+    // 2. Definición dinámica del ordenamiento
+    let orden = { fecha: -1 }; 
+    if (sortParam === "votos") {
+      orden = { votos: -1, likes: -1, fecha: -1 };
+    }
+
+    // ⚡ PROYECCIÓN CRUCIAL: Excluimos el cuerpo del texto para no saturar la RAM ni Vercel
+    const proyeccion = { contenido: 0 };
+
+    // 3. Flujo A: Si viene el parámetro 'page', estructuramos la respuesta con paginación real
+    if (page) {
+      const cantidadPorPagina = limit || 6;
+      const skip = (page - 1) * cantidadPorPagina;
+
+      const [posts, totalPosts] = await Promise.all([
+        Post.find(filtro, proyeccion).sort(orden).skip(skip).limit(cantidadPorPagina).lean(),
+        Post.countDocuments(filtro)
+      ]);
+
+      const postsOptimizados = posts.map(post => ({
+        ...post,
+        portada: optimizarCloudinary(post.portada, 'f_auto,q_auto,w_600'),
+        avatar: optimizarCloudinary(post.avatar, 'f_auto,q_auto,w_150,h_150,c_fill'),
+        imagenes: Array.isArray(post.imagenes) 
+          ? post.imagenes.map(img => optimizarCloudinary(img, 'f_auto,q_auto,w_800'))
+          : post.imagenes
+      }));
+
+      return res.json({
+        posts: postsOptimizados,
+        paginaActual: page,
+        totalPaginas: Math.ceil(totalPosts / cantidadPorPagina),
+        totalPosts
+      });
+    } 
     
+    // 4. Flujo B: Si NO viene 'page', devolvemos un Array directo (Retrocompatibilidad total con la Home vieja)
+    let query = Post.find(filtro, proyeccion).sort(orden);
+    if (limit) {
+      query = query.limit(limit);
+    }
+    
+    const posts = await query.lean();
+
     const postsOptimizados = posts.map(post => ({
       ...post,
-      // Portada optimizada para listados / cards de la Home
       portada: optimizarCloudinary(post.portada, 'f_auto,q_auto,w_600'),
-      // El avatar se achica a 150x150, se recorta al centro (c_fill) y optimiza formato/calidad
       avatar: optimizarCloudinary(post.avatar, 'f_auto,q_auto,w_150,h_150,c_fill'),
-      // Si tenés un array de imágenes secundarias dentro del post, también las optimizamos
       imagenes: Array.isArray(post.imagenes) 
         ? post.imagenes.map(img => optimizarCloudinary(img, 'f_auto,q_auto,w_800'))
         : post.imagenes
     }));
 
-    res.json(postsOptimizados);
+    return res.json(postsOptimizados);
+
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: 'Error al obtener los posts' });
   }
 };
 
-// ─── OPTIMIZACIÓN EN DETALLE DE UN POST ──────────────────────────────────────
+// Obtener un post por su ID completo
 exports.obtenerPostPorId = async (req, res) => {
   try {
     const post = await Post.findById(req.params.PostId).lean();
     if (!post) return res.status(404).json({ error: 'Post no encontrado' });
 
-    // En el detalle del post queremos una resolución más alta para la portada (w_1200)
     post.portada = optimizarCloudinary(post.portada, 'f_auto,q_auto,w_1200');
     post.avatar = optimizarCloudinary(post.avatar, 'f_auto,q_auto,w_150,h_150,c_fill');
     if (Array.isArray(post.imagenes)) {
@@ -154,11 +182,10 @@ exports.actualizarPost = async (req, res) => {
       req.params.PostId,
       { titulo, autor, epigrafe, portada, contenido, imagenes, epigrafes, categoria, fecha },
       { new: true, runValidators: true }
-    ).lean(); // Agregamos lean() para poder formatear la respuesta saliente de forma segura
+    ).lean();
 
     if (!postActualizado) return res.status(404).json({ error: 'Post no encontrado' });
 
-    // Optimizamos la respuesta para que el Front reciba los cambios optimizados al instante
     postActualizado.portada = optimizarCloudinary(postActualizado.portada, 'f_auto,q_auto,w_1200');
     postActualizado.avatar = optimizarCloudinary(postActualizado.avatar, 'f_auto,q_auto,w_150,h_150,c_fill');
 
@@ -181,18 +208,14 @@ exports.eliminarPost = async (req, res) => {
   }
 };
 
-
 exports.previewPost = async (req, res) => {
   try {
-    const Post = require('../models/Post');
     const post = await Post.findById(req.params.id);
-
     if (!post) return res.status(404).send('<h1>Post no encontrado</h1>');
 
-    const titulo   = post.titulo   || 'Empatía Digital';
+    const titulo = post.titulo || 'Empatía Digital';
     const epigrafe = post.epigrafe || '';
-    // Portada optimizada para la preview (800px, WebP/auto)
-    const imagen   = optimizarCloudinary(post.portada || '', 'f_auto,q_auto,w_800');
+    const imagen = optimizarCloudinary(post.portada || '', 'f_auto,q_auto,w_800');
     const frontUrl = `https://www.empatiadigital.com.ar/post/${post._id}`;
 
     res.send(`<!DOCTYPE html>
@@ -326,7 +349,6 @@ exports.previewPost = async (req, res) => {
   </script>
 </body>
 </html>`);
-
   } catch (error) {
     res.status(500).send(`<h1>Error: ${error.message}</h1>`);
   }
