@@ -27,7 +27,6 @@ app.use(cors());
 app.use("/descargas", express.static(path.join(__dirname, "public/descargas")));
 
 // ─── Middleware: bloquea requests a /api si MongoDB no está listo ─────────
-
 app.use('/api', (req, res, next) => {
   if (mongoose.connection.readyState !== 1) {
     return res.status(503).json({
