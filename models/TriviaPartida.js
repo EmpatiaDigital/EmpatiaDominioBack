@@ -9,15 +9,21 @@ const TriviaPartidaSchema = new mongoose.Schema({
     default: null,
     index: true,
   },
-  // fingerprint para anonimos (mismo sistema que PostStats)
+  // fingerprint para todos los jugadores
   visitorId: {
     type: String,
     required: true,
     index: true,
   },
-  // IDs de preguntas jugadas en esta partida (del JSON, usamos el campo 'id' o indice)
+  // Nombre opcional: lo deja el jugador al final para aparecer en ranking
+  nombre: {
+    type: String,
+    default: null,
+    maxlength: 40,
+  },
+  // IDs de preguntas jugadas (indices del JSON)
   preguntasJugadas: {
-    type: [String],
+    type: [Number],
     default: [],
   },
   puntaje: {
@@ -48,16 +54,23 @@ const TriviaPartidaSchema = new mongoose.Schema({
     enum: ['PRO', 'MEDIUM', 'APRENDIZ'],
     required: true,
   },
+  // Tiempo total de la partida en segundos (para desempate en ranking)
+  tiempoSegundos: {
+    type: Number,
+    default: null,
+  },
   completada: {
     type: Boolean,
     default: true,
   },
 }, {
-  timestamps: true, // createdAt y updatedAt automaticos
+  timestamps: true,
 });
 
-// Indice compuesto para ranking por usuario
-TriviaPartidaSchema.index({ userId: 1, puntaje: -1 });
+// Indice para ranking: mayor puntaje, menor tiempo
+TriviaPartidaSchema.index({ puntaje: -1, tiempoSegundos: 1 });
+// Indice para buscar por visitorId + completada
+TriviaPartidaSchema.index({ visitorId: 1, completada: 1 });
 // Indice para estadisticas globales
 TriviaPartidaSchema.index({ createdAt: -1 });
 
