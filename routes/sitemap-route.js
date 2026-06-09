@@ -3,7 +3,8 @@ const router  = express.Router();
 const Post    = require('../models/Post'); 
  
 const DOMAIN = 'https://empatiadigital.com.ar';
- 
+
+
 const STATIC_ROUTES = [
   { path: '/',                             priority: '1.0', changefreq: 'daily'   },
   { path: '/post',                         priority: '0.9', changefreq: 'daily'   },
