@@ -1,5 +1,4 @@
 // routes/triviaRoutes.js
-// Montar en index.js: app.use('/api/trivia', require('./routes/triviaRoutes'));
 
 const express = require('express');
 const router  = express.Router();
@@ -29,6 +28,8 @@ router.post('/partida', async (req, res) => {
     respuestasCorrectas,
     totalPreguntas,
     rango,
+    tiempoSegundos, // nuevo: tiempo total de la partida en segundos
+    nombre,         // nuevo: nombre opcional para aparecer en ranking
   } = req.body;
 
   if (!visitorId) return res.status(400).json({ error: 'visitorId requerido' });
@@ -47,6 +48,8 @@ router.post('/partida', async (req, res) => {
       respuestasCorrectas,
       totalPreguntas,
       rango,
+      tiempoSegundos: tiempoSegundos || null,
+      nombre: nombre ? nombre.trim().slice(0, 40) : null,
       completada: true,
     });
 
@@ -57,45 +60,89 @@ router.post('/partida', async (req, res) => {
   }
 });
 
-// ─── GET /api/trivia/ranking — Top 10 usuarios logueados ────────────────────
-router.get('/ranking', async (req, res) => {
+// ─── GET /api/trivia/top3 — Top 3 para mostrar durante el juego ─────────────
+// Criterio: mayor puntaje, desempate por menor tiempo
+router.get('/top3', async (req, res) => {
   try {
-    const ranking = await TriviaPartida.aggregate([
-      { $match: { userId: { $ne: null }, completada: true } },
-      // Mejor partida por usuario
+    const top3 = await TriviaPartida.aggregate([
+      {
+        $match: {
+          completada: true,
+          nombre: { $ne: null, $ne: '' }, // solo los que dejaron nombre
+        },
+      },
+      // Una entrada por visitorId: mejor partida de cada jugador
+      {
+        $sort: { puntaje: -1, tiempoSegundos: 1, createdAt: -1 },
+      },
       {
         $group: {
-          _id: '$userId',
-          mejorPuntaje:    { $max: '$puntaje' },
-          totalPartidas:   { $sum: 1 },
-          porcentajePromedio: { $avg: '$porcentaje' },
-          mejorRango:      { $first: '$rango' },
-          ultimaPartida:   { $max: '$createdAt' },
+          _id: '$visitorId',
+          nombre:            { $first: '$nombre' },
+          mejorPuntaje:      { $first: '$puntaje' },
+          porcentaje:        { $first: '$porcentaje' },
+          tiempoSegundos:    { $first: '$tiempoSegundos' },
+          rango:             { $first: '$rango' },
+          totalPartidas:     { $sum: 1 },
         },
       },
-      { $sort: { mejorPuntaje: -1, porcentajePromedio: -1 } },
-      { $limit: 10 },
-      // Join con coleccion de usuarios para traer el nombre
-      {
-        $lookup: {
-          from: 'users',
-          localField: '_id',
-          foreignField: '_id',
-          as: 'usuario',
-        },
-      },
-      { $unwind: { path: '$usuario', preserveNullAndEmpty: true } },
+      { $sort: { mejorPuntaje: -1, tiempoSegundos: 1 } },
+      { $limit: 3 },
       {
         $project: {
           _id: 0,
-          userId: '$_id',
-          nombre: { $ifNull: ['$usuario.nombre', '$usuario.name', 'Usuario'] },
-          avatar: { $ifNull: ['$usuario.avatar', null] },
+          nombre: 1,
           mejorPuntaje: 1,
+          porcentaje: 1,
+          tiempoSegundos: 1,
+          rango: 1,
+          totalPartidas: 1,
+        },
+      },
+    ]);
+
+    res.json(top3);
+  } catch (err) {
+    console.error('Error obteniendo top3:', err);
+    res.status(500).json({ error: 'Error interno' });
+  }
+});
+
+// ─── GET /api/trivia/ranking — Top 10 con nombre (no requiere login) ─────────
+router.get('/ranking', async (req, res) => {
+  try {
+    const ranking = await TriviaPartida.aggregate([
+      {
+        $match: {
+          completada: true,
+          nombre: { $ne: null, $ne: '' },
+        },
+      },
+      { $sort: { puntaje: -1, tiempoSegundos: 1, createdAt: -1 } },
+      {
+        $group: {
+          _id: '$visitorId',
+          nombre:              { $first: '$nombre' },
+          mejorPuntaje:        { $first: '$puntaje' },
+          porcentaje:          { $first: '$porcentaje' },
+          tiempoSegundos:      { $first: '$tiempoSegundos' },
+          mejorRango:          { $first: '$rango' },
+          totalPartidas:       { $sum: 1 },
+          porcentajePromedio:  { $avg: '$porcentaje' },
+        },
+      },
+      { $sort: { mejorPuntaje: -1, tiempoSegundos: 1 } },
+      { $limit: 10 },
+      {
+        $project: {
+          _id: 0,
+          nombre: 1,
+          mejorPuntaje: 1,
+          porcentaje: 1,
+          tiempoSegundos: 1,
+          mejorRango: 1,
           totalPartidas: 1,
           porcentajePromedio: { $round: ['$porcentajePromedio', 0] },
-          mejorRango: 1,
-          ultimaPartida: 1,
         },
       },
     ]);
@@ -107,25 +154,7 @@ router.get('/ranking', async (req, res) => {
   }
 });
 
-// ─── GET /api/trivia/mis-partidas — Historial del usuario logueado ───────────
-router.get('/mis-partidas', async (req, res) => {
-  const userId = getUserIdFromToken(req);
-  if (!userId) return res.status(401).json({ error: 'No autenticado' });
-
-  try {
-    const partidas = await TriviaPartida.find({ userId, completada: true })
-      .sort({ createdAt: -1 })
-      .limit(20)
-      .select('puntaje puntajeMaximo porcentaje respuestasCorrectas totalPreguntas rango createdAt');
-
-    res.json(partidas);
-  } catch (err) {
-    console.error('Error obteniendo historial:', err);
-    res.status(500).json({ error: 'Error interno' });
-  }
-});
-
-// ─── GET /api/trivia/stats — Estadisticas globales (admin) ──────────────────
+// ─── GET /api/trivia/stats — Estadisticas globales ───────────────────────────
 router.get('/stats', async (req, res) => {
   try {
     const [totales] = await TriviaPartida.aggregate([
@@ -133,9 +162,9 @@ router.get('/stats', async (req, res) => {
       {
         $group: {
           _id: null,
-          totalPartidas:      { $sum: 1 },
-          promedioGlobal:     { $avg: '$porcentaje' },
-          puntajeMaximoEver:  { $max: '$puntaje' },
+          totalPartidas:        { $sum: 1 },
+          promedioGlobal:       { $avg: '$porcentaje' },
+          puntajeMaximoEver:    { $max: '$puntaje' },
           totalJugadoresUnicos: { $addToSet: '$visitorId' },
         },
       },
@@ -143,7 +172,7 @@ router.get('/stats', async (req, res) => {
         $project: {
           _id: 0,
           totalPartidas: 1,
-          promedioGlobal: { $round: ['$promedioGlobal', 1] },
+          promedioGlobal:       { $round: ['$promedioGlobal', 1] },
           puntajeMaximoEver: 1,
           totalJugadoresUnicos: { $size: '$totalJugadoresUnicos' },
         },
