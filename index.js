@@ -17,6 +17,7 @@ const courseRoutes = require('./routes/courseRoutes');
 const inscriptionRoutes = require('./routes/inscriptionRoutes');
 const postStatsRoutes = require('./routes/postStatsRoutes');
 const sitemapRoute = require('./routes/sitemap-route');
+const triviaRoutes = require('./routes/triviaRoutes');
 dotenv.config();
 const app = express();
 // Middleware
@@ -76,5 +77,6 @@ app.use('/api', userActividadRoutes);
 app.use('/api', postStatsRoutes);
 app.use('/api/courses', courseRoutes);
 app.use('/api/inscriptions', inscriptionRoutes);
+app.use('/api/trivia', triviaRoutes);
 // ─── Exportar para Vercel (NO usar app.listen) ────────────────────────────────
 module.exports = app;
