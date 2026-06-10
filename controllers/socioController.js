@@ -5,7 +5,6 @@ const User = require('../models/User');
 const nodemailer = require('nodemailer');
 const crypto = require('crypto');
 
-// Transportador básico con Gmail
 const transporter = nodemailer.createTransport({
   host: "smtp.gmail.com",
   port: 465,
@@ -18,18 +17,17 @@ const transporter = nodemailer.createTransport({
 
 exports.registrarSocio = async (req, res) => {
   try {
-    const {
-      nombre,
-      apellido,
-      correo,
-      telefono,
-      ciudad,
-    } = req.body;
+    const { nombre, apellido, correo, ciudad } = req.body;
 
-    // provincia no viene del frontend, se fuerza a default
+    // telefono: si viene vacío lo normalizamos a null para evitar conflictos de índice único
+    const telefono = req.body.telefono && req.body.telefono.trim() !== ""
+      ? req.body.telefono.trim()
+      : null;
+
+    // provincia: el frontend no la manda, siempre "no registrado"
     const provincia = req.body.provincia || "no registrado";
 
-    // ── Validación: solo por correo ──────────────────────────────────────────
+    // ── Validación SOLO por correo ──────────────────────────────────────────
     const existePorCorreo = await Socio.findOne({ correo });
     if (existePorCorreo) {
       return res.status(400).json({
@@ -38,9 +36,9 @@ exports.registrarSocio = async (req, res) => {
       });
     }
 
-    // ── Validación: teléfono solo si viene y no está vacío ───────────────────
-    if (telefono && telefono.trim() !== "") {
-      const existePorTelefono = await Socio.findOne({ telefono: telefono.trim() });
+    // ── Validación por teléfono SOLO si vino con valor ──────────────────────
+    if (telefono) {
+      const existePorTelefono = await Socio.findOne({ telefono });
       if (existePorTelefono) {
         return res.status(400).json({
           success: false,
@@ -51,27 +49,25 @@ exports.registrarSocio = async (req, res) => {
 
     const idUnico = new mongoose.Types.ObjectId();
 
-    // Obtener número de socio secuencial
+    // Número de socio secuencial
     const ultimoSocio = await Socio.findOne().sort({ numeroSocio: -1 });
     const nuevoNumero = ultimoSocio ? ultimoSocio.numeroSocio + 1 : 1;
 
-    const cuotaAnual = 12;
-
-    // ── Crear socio ──────────────────────────────────────────────────────────
+    // ── Crear Socio ─────────────────────────────────────────────────────────
     const nuevoSocio = new Socio({
       _id: idUnico,
       nombre,
       apellido,
       correo,
-      telefono: telefono?.trim() || "",
+      telefono,
       provincia,
       ciudad,
       numeroSocio: nuevoNumero,
-      cuota: cuotaAnual,
+      cuota: 12,
     });
     await nuevoSocio.save();
 
-    // ── Registrar socio por ciudad ───────────────────────────────────────────
+    // ── Crear SocioPorCiudad ────────────────────────────────────────────────
     if (ciudad) {
       const socioCiudad = new SocioPorCiudad({
         _id: idUnico,
@@ -83,7 +79,7 @@ exports.registrarSocio = async (req, res) => {
       await socioCiudad.save();
     }
 
-    // ── Generar usuario y contraseña ─────────────────────────────────────────
+    // ── Crear User ──────────────────────────────────────────────────────────
     const password = crypto.randomBytes(6).toString('hex');
     const username = correo.toLowerCase();
 
@@ -95,7 +91,7 @@ exports.registrarSocio = async (req, res) => {
     });
     await nuevoUsuario.save();
 
-    // ── Enviar correo ────────────────────────────────────────────────────────
+    // ── Enviar correo ───────────────────────────────────────────────────────
     const mailOptions = {
       from: '"Empatia - Registro de Socios" <empatiadigital2025@gmail.com>',
       to: correo,
@@ -105,22 +101,18 @@ exports.registrarSocio = async (req, res) => {
           <div style="max-width: 600px; margin: auto; background: white; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.1); padding: 30px;">
             <h2 style="color: #005b4f; text-align: center;">¡Bienvenido/a, ${nombre}!</h2>
             <p>Nos llena de alegría saber que decidiste ser parte de este espacio. A partir de ahora, ¡sos parte de algo mucho más grande!</p>
-
             <p>Guardá con cuidado estos datos, ya que los vas a necesitar para acceder por primera vez a la plataforma:</p>
-
             <ul style="background-color: #f0f4f3; padding: 15px; border-radius: 5px; list-style: none;">
               <li><strong>Usuario (email):</strong> ${username}</li>
               <li><strong>Contraseña provisoria:</strong> ${password}</li>
             </ul>
-
             <p style="margin-top: 20px;">Por tu seguridad, al ingresar por primera vez se te pedirá que cambies esta contraseña.</p>
-
             <div style="text-align: center; margin: 25px 0;">
-              <a href="https://empatiadigital.com.ar/login" target="_blank" style="background-color: #005b4f; color: white; padding: 12px 25px; border-radius: 5px; text-decoration: none; font-size: 16px;">
+              <a href="https://empatiadigital.com.ar/login" target="_blank"
+                style="background-color: #005b4f; color: white; padding: 12px 25px; border-radius: 5px; text-decoration: none; font-size: 16px;">
                 Ingresar a la plataforma
               </a>
             </div>
-
             <p>Ante cualquier duda, escribinos. ¡Gracias por confiar en Empatia!</p>
             <hr />
             <p style="font-size: 12px; color: #999; text-align: center;">Este mensaje fue enviado automáticamente. No respondas a este correo.</p>
@@ -141,7 +133,7 @@ exports.registrarSocio = async (req, res) => {
   } catch (error) {
     console.error('Error en registro de socio:', error);
 
-    // Manejar error de índice único duplicado de Mongo (por si acaso)
+    // Red de seguridad: si Mongo lanza duplicate key igual lo manejamos
     if (error.code === 11000) {
       const campo = Object.keys(error.keyValue || {})[0] || "dato";
       return res.status(400).json({
